@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, MONTHS } from "@/lib/utils";
-import { Check, X, Loader2, AlertTriangle } from "lucide-react";
+import { Check, X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Fees() {
@@ -45,6 +45,13 @@ export default function Fees() {
 
   const updateMethod = async (f, method) => {
     await api.put(`/fees/${f.id}`, { method });
+    load();
+  };
+
+  const onDelete = async (f) => {
+    if (!confirm(`Delete the ${MONTHS[f.period_month - 1]} ${f.period_year} fee row for unit ${f.unit_number}?`)) return;
+    await api.delete(`/fees/${f.id}`);
+    toast.success("Fee row deleted");
     load();
   };
 
@@ -162,6 +169,11 @@ function Stat({ label, value, accent, testid, icon: Icon }) {
         <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">{label}</div>
         {Icon ? <div className={`h-8 w-8 rounded-md flex items-center justify-center ${accent}`}><Icon size={16} /></div> : null}
       </div>
+      <div className="font-display text-3xl font-bold mt-3 tabular-nums">{value}</div>
+    </div>
+  );
+}
+div>
       <div className="font-display text-3xl font-bold mt-3 tabular-nums">{value}</div>
     </div>
   );
