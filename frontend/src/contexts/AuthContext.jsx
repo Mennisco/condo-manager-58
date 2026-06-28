@@ -14,6 +14,12 @@ export function AuthProvider({ children }) {
     setUnauthorizedHandler(() => setUser(false));
 
     let cancelled = false;
+    // Hard safety: never stay in 'loading' state for more than 10s.
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) {
+        setUser((u) => (u === null ? false : u));
+      }
+    }, 10000);
     (async () => {
       try {
         const { data } = await api.get("/auth/me");
@@ -24,6 +30,7 @@ export function AuthProvider({ children }) {
     })();
     return () => {
       cancelled = true;
+      clearTimeout(safetyTimer);
       setUnauthorizedHandler(null);
     };
   }, []);

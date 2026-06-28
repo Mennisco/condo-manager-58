@@ -1,0 +1,17 @@
+{
+  "summary": "Validated defensive fixes for indefinite Loading state. Backend smoke (10 endpoints) all 200 OK <250ms. Frontend: fresh / redirects to /login in 0.65s; with slow /auth/me, fallback link appears at 5.36s and safety timer auto-redirects at 10.88s; login → dashboard → logout flow unbroken. No page errors.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "Backend: /api/auth/login 200 (0.33s), /api/auth/me 401 unauth (0.16s) / 200 with cookie (0.10s), /api/auth/logout 200, /api/dashboard/summary?year=2025 200, /api/units 200, /api/fees?year=2025 200, /api/budget?year=2025 200, /api/expenses 200, /api/reports/annual?year=2025 200",
+    "Fix verification 1: Fresh context loads / and redirects to /login in 0.65s (well under 3s); auth-loading shown only briefly, fallback link NEVER appears under normal latency",
+    "Fix verification 2: With /auth/me intercepted (12s delay), [data-testid=auth-loading] visible immediately, [data-testid=loading-go-to-login] appeared at 5.36s (target ~4s), safety timer auto-redirected to /login at 10.88s (target ~10s)",
+    "Fix verification 3: Login (treasurer@condoassoc.org) → /dashboard renders with KPIs (YTD Income $250, Expenses $500, Net -$250), monthly cashflow chart, treasurer email visible in sidebar; Sign out → /login works",
+    "No JS page errors during any flow"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Regression CRUD endpoints (POST /units, /fees/generate, /compliance/seed, vendors, communications) not re-exercised in this iteration since iteration_2 covered them and read endpoints + auth all pass identically. Defer to full testing agent."
+}

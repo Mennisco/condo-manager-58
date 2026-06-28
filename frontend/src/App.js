@@ -1,5 +1,6 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, Link } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import AppShell from "@/components/layout/AppShell";
@@ -16,10 +17,30 @@ import Reports from "@/pages/Reports";
 
 function Protected() {
   const { user } = useAuth();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (user !== null) return;
+    const t = setTimeout(() => setSlow(true), 4000);
+    return () => clearTimeout(t);
+  }, [user]);
+
   if (user === null) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-[#78716C]" data-testid="auth-loading">
-        Loading…
+      <div
+        data-testid="auth-loading"
+        className="min-h-screen flex flex-col items-center justify-center text-[#78716C] gap-4 px-6"
+      >
+        <div className="h-8 w-8 border-2 border-[#166534] border-t-transparent rounded-full animate-spin" />
+        <div>Loading…</div>
+        {slow && (
+          <Link
+            to="/login"
+            data-testid="loading-go-to-login"
+            className="text-sm text-[#166534] underline mt-2"
+          >
+            Taking too long? Go to sign-in
+          </Link>
+        )}
       </div>
     );
   }

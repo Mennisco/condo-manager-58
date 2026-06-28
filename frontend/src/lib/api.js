@@ -6,6 +6,7 @@ export const API = `${BACKEND_URL}/api`;
 const api = axios.create({
   baseURL: API,
   withCredentials: true,
+  timeout: 15000,
 });
 
 // Endpoints that are *expected* to 401 when the user isn't logged in.
