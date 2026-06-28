@@ -1,0 +1,71 @@
+{
+  "theme": "light",
+  "archetype": "Archetype 1 (Organic & Earthy)",
+  "emotional_tone": "Calm, organized, trustworthy, and frictionless. Feels like structured paper rather than a sterile tech tool.",
+  "colors": {
+    "background_primary": "#F5F5F4",
+    "background_secondary": "#FFFFFF",
+    "text_primary": "#1C1917",
+    "text_secondary": "#78716C",
+    "brand_primary": "#166534",
+    "brand_primary_hover": "#14532D",
+    "accent_alert": "#C53030",
+    "accent_alert_bg": "#FEF2F2",
+    "accent_warning": "#B45309",
+    "accent_warning_bg": "#FFFBEB",
+    "accent_success": "#15803D",
+    "accent_success_bg": "#F0FDF4",
+    "border_color": "#E7E5E4"
+  },
+  "typography": {
+    "font_family": {
+      "headings": "Manrope",
+      "body": "DM Sans"
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl tracking-tight font-bold text-[#1C1917]",
+      "h2": "text-2xl sm:text-3xl tracking-tight font-semibold text-[#1C1917]",
+      "h3": "text-xl sm:text-2xl tracking-tight font-medium text-[#1C1917]",
+      "h4": "text-lg sm:text-xl font-medium text-[#1C1917]",
+      "body": "text-base leading-relaxed text-[#78716C]",
+      "small_label": "text-xs sm:text-sm uppercase tracking-[0.15em] font-bold text-[#78716C]"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_system": "Generous. p-6, p-8, p-12. Avoid cramped data views.",
+    "container_padding": "Cards and containers must use p-6 or p-8 to prevent text collision. For tables, ensure wide padding in cells (px-6 py-4).",
+    "dashboard_grid": "Base: grid-cols-1 md:grid-cols-3 lg:grid-cols-4. Gap: gap-6. Summary metrics use col-span-1. Charts or tables use col-span-2 or col-span-3.",
+    "surfaces": "Flat Solid. bg-white with 1px border (#E7E5E4). No heavy drop shadows. Optional subtle shadow (shadow-sm) on hover."
+  },
+  "component_instructions": {
+    "general": "Rely on Shadcn UI but customize to be flat and generously spaced. Remove border-radius if desired or keep small (rounded-md).",
+    "buttons": "Solid brand color for primary, flat off-white for secondary. Never use Inter. Apply hover states.",
+    "inputs": "Use Shadcn inputs, wide padding, clear focus rings (focus:ring-2 focus:ring-[#166534]/50 focus:border-[#166534]).",
+    "tables": "Row hover effects (hover:bg-[#F5F5F4]). Avoid vertical borders inside the table. Clear text hierarchy for numbers (tabular-nums).",
+    "cards": "Cardless or very subtle flat cards. No glassmorphism. Flat solid surfaces only to maintain data clarity."
+  },
+  "testing": {
+    "attributes": "ALL interactive and key informational elements MUST include `data-testid` attribute (e.g., `data-testid=\"login-submit-button\"`)."
+  },
+  "icons": {
+    "library": "lucide-react",
+    "style": "Minimalist, matching text size, usually 20px or 24px."
+  },
+  "media_urls": [
+    {
+      "category": "Login Background / Cover",
+      "url": "https://images.pexels.com/photos/31656145/pexels-photo-31656145.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Contemporary apartment blocks showcasing modern architectural design. Use for login screen split-layout background with an overlay (bg-black/20) for branding."
+    },
+    {
+      "category": "Empty State / Decoration",
+      "url": "https://images.pexels.com/photos/7307386/pexels-photo-7307386.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Minimalist abstract scene with geometric shapes in sage green. Use as a soft, calming empty-state visual for 'No overdue payments' or 'No expenses found'."
+    }
+  ],
+  "feature_notes": {
+    "dashboard": "Top row KPI cards for YTD Income, YTD Expenses, Current Balance, Overdue Payments.",
+    "navigation": "Side or top nav. Keep it simple. Visible links: Dashboard, Units/Owners, Fees, Expenses, Budget, Comm Log, Compliance.",
+    "compliance_checklist": "Use standard Shadcn Checkbox list for Illinois NFP and IRS 1120-H/990 steps."
+  }
+}
