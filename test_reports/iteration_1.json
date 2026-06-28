@@ -1,0 +1,37 @@
+{
+  "summary": "First-finish smoke test of condo association app. Backend auth + all major CRUD/business endpoints (units, fees, expenses, budget, vendors, communications, compliance, reports) verified via API. Frontend e2e: login -> units -> fees -> expenses -> budget -> compliance -> reports -> logout all working. Idempotency for fees/generate and compliance/seed confirmed. paid_date auto-set on PUT /api/fees/{id}. budget/generate-from-prior aggregates prior-year expenses with uplift.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login (200, returns user JSON)",
+    "GET /api/auth/me with httpOnly cookie (200)",
+    "GET /api/dashboard/summary?year=YYYY returns all expected fields (ytd_income, ytd_expenses, balance_ytd, overdue_count, overdue_amount, units_count, expenses_by_category, monthly[12])",
+    "POST /api/units creates unit (201/200)",
+    "GET /api/units lists units",
+    "POST /api/fees/generate first call -> {created:1}, second call -> {created:0} (idempotent)",
+    "GET /api/fees?year=&month= returns generated fees",
+    "PUT /api/fees/{id} with paid=true auto-sets paid_date and updates method/notes/amount_paid",
+    "POST /api/expenses creates expense; GET filters by year",
+    "Dashboard expenses_by_category reflects new expense (Landscaping $500)",
+    "POST /api/budget/generate-from-prior with uplift_pct=5 produced 2027 BudgetItem ($525 from $500)",
+    "POST /api/compliance/seed first=13 tasks, second=0 (idempotent); returns IL_NFP, IRS, Internal categories",
+    "GET /api/reports/annual returns association_name, summary, expenses, fees, budget, generated_at, year",
+    "Frontend login flow with data-testid login-email/password/submit",
+    "Sidebar nav (nav-units, nav-fees, nav-expenses, nav-budget, nav-compliance, nav-reports) all navigate",
+    "Annual Report page renders financial summary with correct Income ($250), Expenses ($500), Net Balance (-$250) and monthly table",
+    "logout-button clears cookie and redirects to /login"
+  ],
+  "failed": [
+    {
+      "area": "frontend/console",
+      "issue": "Recharts ResponsiveContainer logs warning: 'The width(-1) and height(-1) of chart should be greater than 0' on Dashboard (4x). Cosmetic only; charts still render at intended size after mount.",
+      "evidence": "Console warning captured during login redirect to Dashboard",
+      "priority": "LOW"
+    }
+  ],
+  "action_items": [
+    "(Optional) Add minHeight to Recharts ResponsiveContainer parent on Dashboard to silence width(-1)/height(-1) warnings."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
