@@ -173,8 +173,3 @@ function Stat({ label, value, accent, testid, icon: Icon }) {
     </div>
   );
 }
-div>
-      <div className="font-display text-3xl font-bold mt-3 tabular-nums">{value}</div>
-    </div>
-  );
-}

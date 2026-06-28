@@ -1,0 +1,28 @@
+{
+  "summary": "Fees.jsx compile error is fixed and page renders cleanly. However, the new delete-fee button feature is NOT actually shipped — Trash2 is imported and the onDelete handler exists, but the <button data-testid='delete-fee-{unit_number}'> JSX was truncated out of the row. 0 delete buttons render in the DOM across all 10 June 2026 rows.",
+  "tested_scope": ["frontend", "backend", "integration"],
+  "passed": [
+    "Backend /api/auth/login returns 200 with user payload",
+    "Frontend loads at REACT_APP_BACKEND_URL without compile error",
+    "/fees page renders (data-testid='fees-page' present)",
+    "Year=2026 / Month=June selector works; all 10 fee rows render (units 601, 603, 605, 607, 609, 611, 613, 615, 617, 619)",
+    "Stat cards render: Collected $0.00, Total Due $1,224.00, Unpaid Units 10",
+    "Method <select> and toggle-paid button still render per row",
+    "Dashboard route renders after navigation (no regression on root page)"
+  ],
+  "failed": [
+    {
+      "area": "frontend / Fees.jsx",
+      "issue": "Delete button is missing from rendered output. data-testid='delete-fee-601' (and all other unit numbers) does NOT exist in the DOM. Inspecting fee-row-601 inner HTML confirms only 7 <td> cells (unit, owner, due, paid, date, method, status) — no Trash2 button anywhere. The onDelete function is defined (line 51-56) and Trash2 is imported (line 4), but the JSX <button onClick={() => onDelete(f)}>...</button> with the data-testid was lost when the file was truncated to 175 lines.",
+      "evidence": "Playwright: page.query_selector_all('[data-testid^=\"delete-fee-\"]') returned 0 elements. Inner HTML of fee-row-601 ends at the Status <td> with only the toggle-paid button. Screenshot also shows no trash icon in the Status column.",
+      "priority": "HIGH"
+    }
+  ],
+  "action_items": [
+    "In /app/frontend/src/pages/Fees.jsx, add the delete button back inside the row. Suggested placement: inside the existing Status <td> (lines 141-153) next to the toggle-paid button, OR as an 8th <td>. Example:\n  <button data-testid={`delete-fee-${f.unit_number}`} onClick={() => onDelete(f)} className=\"ml-2 text-[#C53030] hover:bg-[#FEF2F2] p-1.5 rounded-md\" title=\"Delete fee row\"><Trash2 size={14} /></button>\n  Without this, the user's reported feature (delete button) is not present even though they believe it ships.",
+    "After re-adding, verify with: data-testid='delete-fee-601' is clickable, confirm() fires, DELETE /api/fees/{id} succeeds, the row disappears, and 'Generate June fees' restores it idempotently."
+  ],
+  "success_rate": {"backend": "100%", "frontend": "50%"},
+  "retest_needed": true,
+  "full_testing_deferred": true
+}
