@@ -8,6 +8,37 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Endpoints that are *expected* to 401 when the user isn't logged in.
+// We don't redirect on these — the AuthContext handles them gracefully.
+const SILENT_401_PATHS = ["/auth/me", "/auth/login"];
+
+// Global handler set by AuthProvider to invalidate user state on 401.
+let onUnauthorized = null;
+export function setUnauthorizedHandler(fn) {
+  onUnauthorized = fn;
+}
+
+api.interceptors.response.use(
+  (resp) => resp,
+  (error) => {
+    const status = error?.response?.status;
+    const url = error?.config?.url || "";
+    if (status === 401) {
+      const silent = SILENT_401_PATHS.some((p) => url.includes(p));
+      if (!silent) {
+        if (typeof onUnauthorized === "function") {
+          try { onUnauthorized(); } catch (_) {}
+        }
+        // Swallow the rejection: the AuthContext is redirecting to /login
+        // and the calling component will unmount. Returning a never-settling
+        // promise prevents React's dev overlay from flagging an "uncaught 401".
+        return new Promise(() => {});
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export function formatApiError(detail) {
   if (detail == null) return "Something went wrong. Please try again.";
   if (typeof detail === "string") return detail;

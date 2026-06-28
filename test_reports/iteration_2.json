@@ -1,0 +1,18 @@
+{
+  "summary": "Verified the 'Uncaught runtime error: 401' fix. Zero unhandled promise rejections / pageerror events across no-cookie, invalid-cookie, deep-page direct-load, logout+back, and full login flows. Backend smoke (auth + 13 endpoints) clean. Browser-level 'Failed to load resource: 401' console entries on unauthed initial load are expected Chrome network logs and are NOT the React dev overlay bug being fixed — pageerror count was 0 in every scenario.",
+  "tested_scope": ["frontend", "backend", "auth", "integration"],
+  "passed": [
+    "Test 1: Fresh context no cookie -> silent redirect to /login, login form visible, 0 pageerrors",
+    "Test 2: Invalid access_token cookie -> silent redirect to /login from /units, 0 pageerrors",
+    "Test 3: Direct load of /units, /fees, /expenses, /budget, /vendors, /communications, /compliance, /reports all render their *-page testid with 0 errors",
+    "Test 4: Logout via sidebar logout-button + browser back button -> stays on /login, 0 pageerrors",
+    "Test 5: Login with treasurer@condoassoc.org succeeds, dashboard-page renders, current-user-email matches",
+    "Backend: /api/auth/me, /api/units return 401 unauthed; login returns 200 + sets cookie; /api/auth/me, /dashboard/summary, /units, /fees, /expenses, /vendors, /communications all 200 authed; /budget, /compliance, /reports/annual return 422 (missing required query params - expected, not auth issue); /api/auth/logout 200"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true,
+  "notes": "Two browser console messages of form 'Failed to load resource: ... 401 ()' appear on unauthed initial /api/auth/me — these are emitted by Chromium for any failed network response and cannot be suppressed by app code. They are NOT uncaught exceptions and do NOT trigger the React dev overlay. The user-reported 'Uncaught runtime error 401' (an unhandled promise rejection) was 0 across all 5 tests as measured via page.on('pageerror')."
+}

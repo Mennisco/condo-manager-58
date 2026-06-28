@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import api, { formatApiError } from "@/lib/api";
+import api, { formatApiError, setUnauthorizedHandler } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
@@ -8,6 +8,11 @@ export function AuthProvider({ children }) {
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Whenever any API call returns 401 (other than /auth/me, /auth/login)
+    // mark the user as logged-out so the app redirects to /login instead of
+    // showing an "Uncaught 401" overlay.
+    setUnauthorizedHandler(() => setUser(false));
+
     let cancelled = false;
     (async () => {
       try {
@@ -19,6 +24,7 @@ export function AuthProvider({ children }) {
     })();
     return () => {
       cancelled = true;
+      setUnauthorizedHandler(null);
     };
   }, []);
 
