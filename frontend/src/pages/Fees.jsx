@@ -150,6 +150,14 @@ export default function Fees() {
                   >
                     {f.paid ? <Check size={14} /> : <X size={14} />} {f.paid ? "Paid" : "Unpaid"}
                   </button>
+                  <button
+                    data-testid={`delete-fee-${f.unit_number}`}
+                    onClick={() => onDelete(f)}
+                    title="Delete this fee row"
+                    className="ml-3 text-[#C53030] hover:text-[#9b1c1c] align-middle inline-flex"
+                  >
+                    <Trash2 size={16} />
+                  </button>
                 </td>
               </tr>
             ))}

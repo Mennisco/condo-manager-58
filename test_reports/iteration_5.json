@@ -1,0 +1,22 @@
+{
+  "summary": "Retest of Fees delete-button feature after fix in /app/frontend/src/pages/Fees.jsx. All 10 delete buttons now render (including units with trailing whitespace like '605 ', '607 ', etc.). Full delete -> toast -> regenerate cycle works end-to-end. Backend DELETE /api/fees/{id} returns 200 {ok:true}. Final state restored to 10 rows. No regression on dashboard or other Fees behavior.",
+  "tested_scope": ["frontend", "integration"],
+  "passed": [
+    "Login as treasurer@condoassoc.org succeeded",
+    "/fees page renders (data-testid='fees-page')",
+    "Year=2026, Month=June (6) loads all 10 fee rows",
+    "All 10 delete buttons present: delete-fee-601, 603, '605 ', '607 ', '609 ', 611, '613 ', '615 ', '617 ', '619 ' (note trailing-whitespace unit_numbers are reflected in testid as expected)",
+    "Click delete -> confirm() auto-accepted -> DELETE /api/fees/{id} returned 200 {ok:true}",
+    "Toast 'Fee row deleted' appeared (1 match)",
+    "Row count dropped from 10 -> 9 after delete",
+    "Clicking 'generate-fees-btn' restored count to 10 (data preserved)",
+    "toggle-paid buttons (10) and method selects (10) still render per row",
+    "Stats: Collected $0.00, Total Due $1,224.00, Unpaid Units 10",
+    "Dashboard route renders without regression (sidebar nav + YTD cards visible)"
+  ],
+  "failed": [],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
