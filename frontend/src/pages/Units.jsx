@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import api from "@/lib/api";
 import { fmtMoney } from "@/lib/utils";
-import { Plus, Pencil, Trash2, Home, X } from "lucide-react";
+import { Plus, MoreHorizontal, Home, X } from "lucide-react";
 import { toast } from "sonner";
 
 const empty = {
@@ -104,9 +104,12 @@ export default function Units() {
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_email || "—"}</td>
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_phone || "—"}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(u.monthly_fee)}</td>
-                <td className="px-6 py-4 text-right">
-                  <button data-testid={`edit-unit-${u.unit_number}`} onClick={() => onEdit(u)} className="text-[#166534] mr-3"><Pencil size={16} /></button>
-                  <button data-testid={`delete-unit-${u.unit_number}`} onClick={() => onDelete(u.id)} className="text-[#C53030]"><Trash2 size={16} /></button>
+                <td className="px-6 py-4 text-right relative">
+                  <RowMenu
+                    unit={u}
+                    onEdit={() => onEdit(u)}
+                    onDelete={() => onDelete(u.id)}
+                  />
                 </td>
               </tr>
             ))}
@@ -146,6 +149,47 @@ export default function Units() {
               <button data-testid="save-unit-btn" type="submit" className="px-4 py-2 rounded-md bg-[#166534] text-white font-semibold">Save</button>
             </div>
           </form>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RowMenu({ unit, onEdit, onDelete }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+  return (
+    <div ref={ref} className="inline-block relative text-left">
+      <button
+        data-testid={`unit-menu-${unit.unit_number}`}
+        onClick={() => setOpen((v) => !v)}
+        className="h-8 w-8 rounded-md hover:bg-[#F5F5F4] inline-flex items-center justify-center text-[#1C1917]"
+        title="Actions"
+      >
+        <MoreHorizontal size={18} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-32 bg-white border border-[#E7E5E4] rounded-md shadow-md z-20 overflow-hidden">
+          <button
+            data-testid={`edit-unit-${unit.unit_number}`}
+            onClick={() => { setOpen(false); onEdit(); }}
+            className="block w-full text-left px-3 py-2 text-sm hover:bg-[#F5F5F4]"
+          >
+            Edit
+          </button>
+          <button
+            data-testid={`delete-unit-${unit.unit_number}`}
+            onClick={() => { setOpen(false); onDelete(); }}
+            className="block w-full text-left px-3 py-2 text-sm text-[#C53030] hover:bg-[#FEF2F2]"
+          >
+            Delete
+          </button>
         </div>
       )}
     </div>

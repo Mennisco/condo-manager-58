@@ -5,8 +5,8 @@ import { Building2, Loader2 } from "lucide-react";
 
 export default function Login() {
   const { user, login, error } = useAuth();
-  const [email, setEmail] = useState("treasurer@condoassoc.org");
-  const [password, setPassword] = useState("treasurer123");
+  const [email, setEmail] = useState("innsbruckone@gmail.com");
+  const [password, setPassword] = useState("1nn58ruck0ne");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -24,17 +24,16 @@ export default function Login() {
     <div className="min-h-screen grid lg:grid-cols-2 bg-paper">
       <div className="hidden lg:block relative">
         <img
-          src="https://images.pexels.com/photos/31656145/pexels-photo-31656145.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
-          alt="Apartment block"
+          src="https://customer-assets.emergentagent.com/job_assoc-admin-3/artifacts/k5io5897_I1clean.png"
+          alt="Innsbruck One"
           className="absolute inset-0 w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-[#166534]/40" />
         <div className="absolute bottom-0 left-0 right-0 p-12 text-white">
           <div className="font-display text-4xl font-bold leading-tight max-w-md">
-            Run your association with the clarity of a spreadsheet —
-            <span className="opacity-80"> without the spreadsheet.</span>
+            Innsbruck One Manager
           </div>
-          <div className="text-sm opacity-80 mt-4 max-w-md">
+          <div className="text-sm opacity-90 mt-3 max-w-md">
             Track fees, expenses, budgets, vendor &amp; homeowner communications,
             and the annual Illinois NFP filing — all in one calm place.
           </div>
@@ -51,7 +50,7 @@ export default function Login() {
               <Building2 size={22} />
             </div>
             <div>
-              <div className="font-display font-bold text-lg leading-none">Condo Ledger</div>
+              <div className="font-display font-bold text-lg leading-none">Innsbruck One</div>
               <div className="text-xs text-[#78716C] mt-1">Treasurer sign-in</div>
             </div>
           </div>

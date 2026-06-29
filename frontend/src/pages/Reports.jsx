@@ -40,6 +40,14 @@ export default function Reports() {
       </div>
 
       <div className="bg-white border border-[#E7E5E4] rounded-lg p-8 md:p-12 print:border-none print:p-0">
+        <div className="relative h-40 -mx-8 md:-mx-12 -mt-8 md:-mt-12 mb-6 rounded-t-lg overflow-hidden print:hidden">
+          <img
+            src="https://customer-assets.emergentagent.com/job_assoc-admin-3/artifacts/k5io5897_I1clean.png"
+            alt="Innsbruck One"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-[#166534]/40" />
+        </div>
         <div className="border-b border-[#E7E5E4] pb-6 mb-6">
           <div className="flex items-center gap-3 text-[#166534]">
             <FileBarChart2 size={20} />

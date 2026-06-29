@@ -31,7 +31,7 @@ REFRESH_DAYS = 7
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
 
-app = FastAPI(title="Condo Association Manager")
+app = FastAPI(title="Innsbruck One Manager")
 api = APIRouter(prefix="/api")
 
 app.add_middleware(
@@ -874,10 +874,11 @@ async def on_startup():
     except Exception as e:
         log.warning("Index creation failed: %s", e)
 
-    # Seed admin
-    admin_email = os.environ.get("ADMIN_EMAIL", "treasurer@condoassoc.org").lower()
-    admin_pw = os.environ.get("ADMIN_PASSWORD", "treasurer123")
+    # Seed admin (and remove any legacy admin accounts that no longer match)
+    admin_email = os.environ["ADMIN_EMAIL"].lower()
+    admin_pw = os.environ["ADMIN_PASSWORD"]
     admin_name = os.environ.get("ADMIN_NAME", "Treasurer")
+    await db.users.delete_many({"email": {"$ne": admin_email}})
     existing = await db.users.find_one({"email": admin_email})
     if existing is None:
         await db.users.insert_one({

@@ -53,12 +53,24 @@ export default function Dashboard() {
 
   return (
     <div data-testid="dashboard-page" className="space-y-8">
+      <div className="relative h-48 md:h-56 rounded-lg overflow-hidden border border-[#E7E5E4]">
+        <img
+          src="https://customer-assets.emergentagent.com/job_assoc-admin-3/artifacts/k5io5897_I1clean.png"
+          alt="Innsbruck One"
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#166534]/70 via-[#166534]/30 to-transparent" />
+        <div className="absolute bottom-5 left-6 text-white">
+          <div className="text-xs uppercase tracking-[0.15em] font-bold opacity-80">Innsbruck One</div>
+          <div className="font-display text-2xl md:text-3xl font-bold mt-1">Treasurer Dashboard</div>
+        </div>
+      </div>
       <div>
         <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">
           Year-to-Date · {year}
         </div>
         <h1 className="font-display text-4xl sm:text-5xl font-bold tracking-tight mt-2">
-          Treasurer Dashboard
+          Year-at-a-glance
         </h1>
         <p className="text-[#78716C] mt-2 max-w-2xl">
           A calm, paper-clear view of your association's money — income from fees,

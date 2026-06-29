@@ -44,8 +44,8 @@ export default function AppShell({ children }) {
               <Building2 size={20} />
             </div>
             <div>
-              <div className="font-display font-bold text-[#1C1917] leading-tight">Condo Ledger</div>
-              <div className="text-[11px] uppercase tracking-[0.15em] text-[#78716C]">Treasurer Suite</div>
+              <div className="font-display font-bold text-[#1C1917] leading-tight">Innsbruck One</div>
+              <div className="text-[11px] uppercase tracking-[0.15em] text-[#78716C]">Manager</div>
             </div>
           </div>
         </div>
@@ -93,7 +93,7 @@ export default function AppShell({ children }) {
           <div className="h-7 w-7 rounded-md bg-[#166534] text-white flex items-center justify-center">
             <Building2 size={16} />
           </div>
-          <span className="font-display font-bold">Condo Ledger</span>
+          <span className="font-display font-bold">Innsbruck One</span>
         </div>
         <button
           data-testid="mobile-logout"

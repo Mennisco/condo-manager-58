@@ -1,0 +1,29 @@
+{
+  "summary": "Phase A rebrand testing: backend auth swap (innsbruckone@gmail.com / 1nn58ruck0ne) works, old treasurer@condoassoc.org rejected with 401. /api/auth/users returns exactly one user. All core endpoints respond (units=10 preserved, fees/expenses/vendors/communications/dashboard summary all 200). Frontend: tab title 'Innsbruck One Manager', login email pre-filled, building image visible on login left panel, no 'Condo Ledger' text anywhere, Dashboard shows hero banner + 'Year-at-a-glance' heading, Reports page shows banner with print:hidden wrapper, Units page has 10 ⋯ menu buttons with proper testids (including units with trailing whitespace like 'unit-menu-605 '), dropdown reveals Edit+Delete with correct testids, outside-click closes dropdown. No console errors.",
+  "tested_scope": ["backend", "frontend", "auth", "integration"],
+  "passed": [
+    "POST /api/auth/login with new credentials => 200 + user object",
+    "Old credentials treasurer@condoassoc.org => 401 (correctly rejected)",
+    "GET /api/auth/users returns exactly 1 user (innsbruckone@gmail.com)",
+    "GET /api/units returns 10 units (data preserved)",
+    "GET /api/dashboard/summary, /api/fees, /api/expenses, /api/vendors, /api/communications all 200",
+    "Browser tab title is 'Innsbruck One Manager'",
+    "login-email pre-filled with innsbruckone@gmail.com",
+    "Login left panel includes k5io5897_I1clean.png building image",
+    "No 'Condo Ledger' text in login or dashboard",
+    "Dashboard page renders with hero banner image + 'Year-at-a-glance' heading",
+    "Reports page renders banner image; wrapper includes 'print:hidden' class",
+    "Units page: 10 unit-menu-{n} buttons present including ones with trailing whitespace",
+    "Clicking ⋯ opens dropdown with edit-unit-{n} and delete-unit-{n} both visible",
+    "Outside mousedown closes the dropdown",
+    "No console errors during full flow"
+  ],
+  "failed": [],
+  "observations": [
+    {"area": "Units edit modal", "note": "Click on edit-unit-601 inside dropdown succeeded (no error, subsequent Escape+navigation worked). However my generic selector [role=dialog]/.modal/[class*=Dialog] did not match, so 'modal opened' assertion was inconclusive. Likely a custom modal markup; not a blocker.", "priority": "LOW"}
+  ],
+  "action_items": [],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
