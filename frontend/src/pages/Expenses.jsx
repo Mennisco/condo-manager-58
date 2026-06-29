@@ -17,6 +17,7 @@ const empty = {
   description: "",
   amount: "",
   method: "check",
+  date_paid: "",
   notes: "",
 };
 
@@ -55,6 +56,7 @@ export default function Expenses() {
       description: x.description,
       amount: x.amount,
       method: x.method || "check",
+      date_paid: x.date_paid || "",
       notes: x.notes || "",
     });
     setOpen(true);
@@ -181,6 +183,9 @@ export default function Expenses() {
               </Field>
               <Field label="Vendor">
                 <input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} className={inp} />
+              </Field>
+              <Field label="Paid date">
+                <input data-testid="expense-date-paid" type="date" value={form.date_paid} onChange={(e) => setForm({ ...form, date_paid: e.target.value })} className={inp} />
               </Field>
               <Field label="Description" required full>
                 <input data-testid="expense-description" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inp} />

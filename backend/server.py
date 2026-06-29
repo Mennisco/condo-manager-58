@@ -97,6 +97,7 @@ class Unit(BaseDoc):
     owner_phone: Optional[str] = None
     monthly_fee: float = 0.0
     late_fee: float = 0.0
+    ownership_pct: float = 0.0
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -108,7 +109,14 @@ class UnitIn(BaseModel):
     owner_phone: Optional[str] = None
     monthly_fee: float = 0.0
     late_fee: float = 0.0
+    ownership_pct: float = 0.0
     notes: Optional[str] = None
+
+
+class ApplyFeeRow(BaseModel):
+    unit_id: str
+    monthly_fee: float
+    late_fee: float
 
 
 class FeePayment(BaseDoc):
@@ -147,6 +155,7 @@ class Expense(BaseDoc):
     description: str
     amount: float
     method: Optional[str] = None
+    date_paid: Optional[str] = None
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -158,6 +167,7 @@ class ExpenseIn(BaseModel):
     description: str
     amount: float
     method: Optional[str] = None
+    date_paid: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -434,6 +444,19 @@ async def update_unit(unit_id: str, data: UnitIn, user=Depends(get_current_user)
 async def delete_unit(unit_id: str, user=Depends(get_current_user)):
     await db.units.delete_one({"_id": ObjectId(unit_id)})
     return {"ok": True}
+
+
+@api.post("/units/apply-fees")
+async def apply_fees(rows: List[ApplyFeeRow], user=Depends(get_current_user)):
+    """Apply new monthly fee + late fee to units (from the Fee Increase Worksheet)."""
+    n = 0
+    for r in rows:
+        await db.units.update_one(
+            {"_id": ObjectId(r.unit_id)},
+            {"$set": {"monthly_fee": round(r.monthly_fee, 2), "late_fee": round(r.late_fee, 2)}},
+        )
+        n += 1
+    return {"updated": n}
 
 
 # ---------------------------------------------------------------------------
@@ -860,6 +883,50 @@ async def dashboard_summary(year: Optional[int] = None, user=Depends(get_current
         "expenses_by_category": expenses_by_category,
         "monthly": months,
     }
+
+
+@api.get("/dashboard/trends")
+async def dashboard_trends(user=Depends(get_current_user)):
+    """Multi-year trend: collected, expenses, on-time payment rate, late count."""
+    years = set()
+    async for f in db.fee_payments.find({}, {"period_year": 1}):
+        years.add(f["period_year"])
+    out = []
+    for y in sorted(years):
+        collected = 0.0
+        paid_count = 0
+        on_time = 0
+        late = 0
+        async for f in db.fee_payments.find({"period_year": y}):
+            if not f.get("paid"):
+                continue
+            collected += float(f.get("amount_paid", 0) or 0)
+            paid_count += 1
+            pd = f.get("paid_date")
+            if pd:
+                try:
+                    d = datetime.fromisoformat(pd.replace("Z", "+00:00")).date()
+                    if d <= datetime(y, f["period_month"], 10).date():
+                        on_time += 1
+                    else:
+                        late += 1
+                except Exception:
+                    pass
+        exp_agg = await db.expenses.aggregate([
+            {"$match": {"date": {"$gte": f"{y}-01-01", "$lte": f"{y}-12-31"}}},
+            {"$group": {"_id": None, "t": {"$sum": "$amount"}}},
+        ]).to_list(1)
+        expenses = exp_agg[0]["t"] if exp_agg else 0.0
+        out.append({
+            "year": y,
+            "collected": round(collected, 2),
+            "expenses": round(expenses, 2),
+            "paid_count": paid_count,
+            "on_time_count": on_time,
+            "late_count": late,
+            "on_time_rate": round(on_time / paid_count * 100, 1) if paid_count else None,
+        })
+    return {"years": out[-4:]}
 
 
 @api.get("/reports/annual")

@@ -1,0 +1,60 @@
+{
+  "summary": "Full Phase B verification: imported expenses (2023/2024/2025), imported budgets (2024-2027), units.ownership_pct, Expense.date_paid, GET /api/dashboard/trends, POST /api/units/apply-fees, Fee Increase Worksheet UI, Dashboard Multi-Year Trend strip. Backend: 28/28 pytest cases pass (14 pre-existing auth+fees + 14 new Phase B). Frontend: every required selector exists, calculator recalculates correctly, apply-fees writes back to units, Monthly Fees regression still passes.",
+  "backend_tested": [
+    "GET /api/dashboard/trends -> {years:[...]} with 4 cards. 2023 collected=$10,584.00, expenses=$7,370.83, on-time=81.7%, 22 late. 2024 expenses=$17,677.27, 95% on-time, +140% YoY. 2025 expenses=$9,607.40, 98.3% on-time, -46% YoY. 2026 expenses=$500.00, 100% on-time, -95% YoY. All match spec.",
+    "GET /api/expenses?year=2023 -> 36 rows (cats include Insurance/Mowing/Utilities).",
+    "GET /api/expenses?year=2024 -> 45 rows.",
+    "GET /api/expenses?year=2025 -> 44 rows.",
+    "POST /api/expenses with date_paid persists and round-trips on subsequent GET.",
+    "GET /api/budget?year=2026 -> 10 lines, total budgeted_amount=$14,693.75 (FE shows 14,693).",
+    "GET /api/budget?year=2024/2025/2027 -> each has >=5 lines.",
+    "GET /api/units -> 10 units, ownership_pct sums to 1.0 (decimal fractions). FE multiplies by 100 for % display.",
+    "POST /api/units/apply-fees with 10 ApplyFeeRow -> {updated:10}; verified via subsequent GET /api/units that monthly_fee and late_fee are persisted.",
+    "All previous auth (cookies + Bearer) and Monthly Fees regression tests (TestAuthCookies, TestBearerOnlyAuth, Unit 613 March 2023 late fee) still pass."
+  ],
+  "frontend_tested": [
+    "Login -> /dashboard mounts cleanly.",
+    "Dashboard 'trend-strip' present with trend-year-2023, trend-year-2024, trend-year-2025, trend-year-2026. Each shows Collected, Expenses, On-time %, YoY exp. Values match backend exactly.",
+    "Nav 'nav-expenses' -> Expenses page; year=2023 -> 36 expense-row-* rows; year=2024 -> 45 rows; 'add-expense-btn' opens modal containing 'expense-date-paid' input.",
+    "Nav -> /budget; year=2026 -> 10 budget lines + body contains '14,693' (total budgeted). 2027 also loads without errors.",
+    "Nav 'nav-fee-increase' / direct /fee-increase -> fee-increase-page; 10 fi-row-* rows; target-budget-input pre-fills to current annual (14688). Editing to 16000 instantly recalculates fi-new-total to $1,333.33 and fi-total-increase to $109.33. fi-row-613 shows 11.3% ownership, current $138.00, new $150.67, +$12.67, new late $37.67. Totals row shows 100.0%.",
+    "apply-fees-btn -> confirm dialog auto-accepted -> POST /api/units/apply-fees -> 'Updated 10 units' toast. Verified subsequent fee values picked up by Monthly Fees page.",
+    "Monthly Fees regression: nav-fees -> fees-page; year=2023 month=3 -> waive-late-fee-613 selector resolves (count=1); LATE FEES stat=$34.58 (cent drift from apply with 14688 target — expected per spec)."
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts width(-1)/height(-1) warnings still emitted on first paint of Monthly Cashflow and Expenses-by-Category. Cosmetic, pre-existing from iteration_9, no functional impact."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_phase_b.py",
+    "/app/backend/tests/test_auth_and_fees.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Phase B is functionally complete and verified.",
+    "(Optional/cosmetic) Silence Recharts width(-1)/height(-1) warnings on Dashboard ResponsiveContainer.",
+    "(Optional) Consider adding an in-code comment that ownership_pct is stored as decimal fraction (0.098 = 9.8%) — non-obvious and easy to misuse later."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:888-929 dashboard/trends correctly aggregates per year (collected/on_time/late/expenses) and returns last 4 years. on_time_rate guarded against zero paid_count. Good.",
+    "/app/backend/server.py:449-459 apply-fees iterates Pydantic ApplyFeeRow list and round()s to 2dp before update. Good. Note: no auth-role check (any authenticated user can mutate); admin-only guard would be safer for a destructive bulk write.",
+    "/app/backend/server.py:158,170 Expense.date_paid is Optional[str]; FE sends '' or ISO date — both serialize fine.",
+    "/app/backend/server.py:100,112 Unit.ownership_pct is float defaulted 0.0; convention is decimal fraction (sum=1.0). The FE in /app/frontend/src/pages/FeeIncrease.jsx line 115 does (r.pct*100).toFixed(1) — correct. Suggest documenting this convention.",
+    "/app/frontend/src/pages/FeeIncrease.jsx is well-factored, uses useMemo for rows, exposes all required data-testid hooks (fee-increase-page, target-budget-input, fi-row-<unit>, fi-new-total, fi-total-increase, apply-fees-btn). Late-fee constant 0.25 hard-coded — fine, matches spec.",
+    "/app/frontend/src/pages/Dashboard.jsx TrendStrip uses data-testid='trend-strip' and trend-year-<year> per spec, with stable formatting via fmtMoney."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_phase_b.py (new — 14 Phase B tests: trends/expenses/budgets/units+apply-fees/date_paid)"
+  ],
+  "success_rate": {"backend": "100% (28/28)", "frontend": "100% on all spec'd flows"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne (admin)",
+  "seed_data_creation": "None (used existing imported data). Created/deleted one TEST_ expense to verify date_paid round-trip.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Phase B fully verified. New tests at /app/backend/tests/test_phase_b.py. Useful selectors: trend-strip, trend-year-{2023..2026}; nav-fee-increase, fee-increase-page, target-budget-input, fi-row-<unit_number> (e.g., fi-row-613), fi-new-total, fi-total-increase, apply-fees-btn (triggers window.confirm — install dialog handler); expense-date-paid in expense-modal; budget-year input on /budget. Backend conventions: Budget field is 'budgeted_amount' (NOT 'amount'); Unit.ownership_pct is a decimal fraction (sum ~1.0), FE multiplies by 100 for display. Apply with default target (~14688) causes 1-cent drift in Unit 613 late fee (34.59 -> 34.58) and Total Due (916.59 -> 916.58); this is expected per the agent_to_agent_context_note.",
+  "rca_of_the_issue": "N/A — feature verification iteration, no bugs found."
+}

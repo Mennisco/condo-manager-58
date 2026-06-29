@@ -10,6 +10,7 @@ import Units from "@/pages/Units";
 import Fees from "@/pages/Fees";
 import Expenses from "@/pages/Expenses";
 import Budget from "@/pages/Budget";
+import FeeIncrease from "@/pages/FeeIncrease";
 import Vendors from "@/pages/Vendors";
 import Communications from "@/pages/Communications";
 import Compliance from "@/pages/Compliance";
@@ -65,6 +66,7 @@ function App() {
             <Route path="/fees" element={<Fees />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/budget" element={<Budget />} />
+            <Route path="/fee-increase" element={<FeeIncrease />} />
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/communications" element={<Communications />} />
             <Route path="/compliance" element={<Compliance />} />

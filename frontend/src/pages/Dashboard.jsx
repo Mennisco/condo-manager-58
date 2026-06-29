@@ -29,12 +29,61 @@ function KPI({ icon: Icon, label, value, sub, accent, testid }) {
   );
 }
 
+function TrendStrip({ trends }) {
+  if (!trends || trends.length === 0) return null;
+  return (
+    <div data-testid="trend-strip" className="bg-white border border-[#E7E5E4] rounded-lg p-6">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">Multi-Year Trend</div>
+        <div className="text-xs text-[#78716C]">Fees collected · on-time rate · expenses</div>
+      </div>
+      <div className="font-display text-xl font-semibold mb-5">How the association has tracked over time</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {trends.map((t, i) => {
+          const prev = trends[i - 1];
+          const growth = prev && prev.expenses ? ((t.expenses - prev.expenses) / prev.expenses) * 100 : null;
+          return (
+            <div key={t.year} data-testid={`trend-year-${t.year}`} className="border border-[#E7E5E4] rounded-lg p-4 bg-[#FAFAF9]">
+              <div className="font-display text-2xl font-bold">{t.year}</div>
+              <div className="mt-3 space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-[#78716C]">Collected</span>
+                  <span className="tabular-nums font-semibold text-[#166534]">{fmtMoney(t.collected)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#78716C]">Expenses</span>
+                  <span className="tabular-nums font-semibold">{fmtMoney(t.expenses)}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#78716C]">On-time</span>
+                  <span className="tabular-nums font-semibold">{t.on_time_rate != null ? `${t.on_time_rate}%` : "—"}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[#78716C]">YoY exp.</span>
+                  <span className={`tabular-nums text-xs font-semibold ${growth == null ? "text-[#A8A29E]" : growth > 0 ? "text-[#B45309]" : "text-[#166534]"}`}>
+                    {growth == null ? "—" : `${growth > 0 ? "+" : ""}${growth.toFixed(0)}%`}
+                  </span>
+                </div>
+                {t.late_count > 0 ? (
+                  <div className="text-[11px] text-[#A8A29E] pt-1">{t.late_count} late payment{t.late_count > 1 ? "s" : ""}</div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const year = new Date().getFullYear();
   const [data, setData] = useState(null);
+  const [trends, setTrends] = useState(null);
 
   useEffect(() => {
     api.get(`/dashboard/summary?year=${year}`).then((r) => setData(r.data));
+    api.get(`/dashboard/trends`).then((r) => setTrends(r.data.years || []));
   }, [year]);
 
   if (!data) {
@@ -112,6 +161,8 @@ export default function Dashboard() {
           accent="bg-[#FEF2F2] text-[#C53030]"
         />
       </div>
+
+      <TrendStrip trends={trends} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-white border border-[#E7E5E4] rounded-lg p-6 lg:col-span-2">
