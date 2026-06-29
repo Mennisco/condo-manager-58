@@ -1,0 +1,21 @@
+{
+  "summary": "Fresh-context retest confirms login flow works end-to-end. Tab title is 'Innsbruck One Manager', login page is pre-filled with innsbruckone@gmail.com / (12-char password), clicking Sign in lands on dashboard-page, sidebar current-user-email shows innsbruckone@gmail.com, 9 sidebar nav links render. Old creds (treasurer@condoassoc.org / treasurer123) are rejected with 'Invalid email or password'. Only console message is the expected 401 from the bad-creds test. User's sign-in issue is a stale browser bundle, not a regression.",
+  "tested_scope": ["frontend", "auth", "integration"],
+  "passed": [
+    "Tab title = 'Innsbruck One Manager'",
+    "login-email pre-filled with innsbruckone@gmail.com",
+    "login-password pre-filled (12 chars)",
+    "Clicking login-submit with defaults reaches dashboard-page",
+    "current-user-email shows innsbruckone@gmail.com",
+    "9 sidebar nav links present (nav-dashboard, nav-units, nav-fees, ...)",
+    "Old creds treasurer@condoassoc.org rejected with login-error 'Invalid email or password'",
+    "No unexpected console errors (only the intentional 401 from bad-creds test)"
+  ],
+  "failed": [],
+  "action_items": [
+    "Inform user to hard-refresh / clear cache on their preview tab — server-side state is correct; their tab is holding a stale bundle."
+  ],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
