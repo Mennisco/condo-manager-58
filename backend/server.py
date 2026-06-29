@@ -449,6 +449,8 @@ async def delete_unit(unit_id: str, user=Depends(get_current_user)):
 @api.post("/units/apply-fees")
 async def apply_fees(rows: List[ApplyFeeRow], user=Depends(get_current_user)):
     """Apply new monthly fee + late fee to units (from the Fee Increase Worksheet)."""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
     n = 0
     for r in rows:
         await db.units.update_one(

@@ -53,11 +53,20 @@ in a simple, easy-to-use app that I can hand off to the next president or treasu
 - **Per-unit Late Fee**: `late_fee` field on Unit (editable in Units page; = 25% of dues per spreadsheet Fee Incr. Calc. H27-H36 → 601/603/617/619=$30, 605/615=$24.83, 607/609/611/613=$34.59). GET /api/fees enriches each row with `late_fee`, `late_fee_applied` (applies when paid after / unpaid past the 10th of the month), and `total_due`. Per-row Waive toggle (`late_fee_waived`, PUT /api/fees). Fees page shows Late Fee column + Late Fees stat + late fee folded into Total Due.
 - **Imported 2023-2025 fee history** (360 rows) from "Mo. Fees Log" tab: exact deposit dates, paid where a date exists / unpaid where blank, Prepaid logic via shared paid_date. 2026 data untouched. Idempotent import script: `/app/backend/import_history.py`.
 
-## Next Tasks
-1. Phase B import: Expenses (Paid Expenses tab → add `date_paid`), Budget tab, Fee Increase Worksheet page.
-2. Drill-down: click a unit on the dashboard → year-long payment history & balance owed.
-3. CSV export buttons on Expenses and Fees pages.
-4. Receipt/document attachments (object storage).
+## Implemented (June 2026) — Phase B
+- **Imported Paid Expenses** (2023/2024/2025, ~125 rows) from the spreadsheet matrix — one expense per category per month, dated the 1st (month-level granularity). Categories normalized (Mowing, Snow Removal, Utilities, Insurance, Bank/Accounting, Maintenance, Window Washing, Landscaping, Trash Removal, Other). Script: `/app/backend/import_phase_b.py`. Year totals match spreadsheet (2023=$7,370.83, 2024=$17,677.27, 2025=$9,607.40).
+- **Imported Budgets** 2024/2025/2026/2027 (category totals → budget_items). 2026 total = $14,693.75.
+- **Expense.date_paid** field added (optional; blank on import, editable in the Expenses modal).
+- **Unit.ownership_pct** added (decimal fraction, sums to 1.0). Seeded from Fee Incr. Calc. column D.
+- **Fee Increase Worksheet** (`/fee-increase`, nav "Fee Increase"): interactive calculator — enter target annual budget → per-unit new monthly dues = (target/12) × ownership_pct, monthly increase, new late fee = 25% of new dues. "Apply new fees to units" (admin-only POST /api/units/apply-fees) writes new monthly_fee + late_fee to each unit.
+- **Dashboard Multi-Year Trend strip** (GET /api/dashboard/trends): per-year Collected, Expenses, On-time payment rate (paid by the 10th), YoY expense growth, with a de-emphasized late-payment count.
+- Verified: 28/28 backend tests + frontend flows (iteration_10).
+
+## Next Tasks (Future backlog — discuss with user next)
+1. Bank statement PDF reconciliation (P1).
+2. Gmail bank-alert parsing (P1).
+3. One-click year-end statement PDFs emailed to owners (P2).
+4. Per-owner drill-down (click unit → full payment history & balance owed); CSV export on Fees/Expenses.
 
 ## Credentials
 See `/app/memory/test_credentials.md`. Default admin: `treasurer@condoassoc.org` / `treasurer123`.
