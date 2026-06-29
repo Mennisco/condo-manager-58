@@ -122,7 +122,18 @@ export default function Fees() {
                 <td className="px-6 py-4">{f.owner_name}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(f.amount_due)}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(f.amount_paid)}</td>
-                <td className="px-6 py-4 text-[#78716C]">{f.paid_date ? fmtDate(f.paid_date) : "—"}</td>
+                <td className="px-6 py-4 text-[#78716C]">
+                  {f.paid_date ? fmtDate(f.paid_date) : "—"}
+                  {f.prepaid ? (
+                    <span
+                      data-testid={`prepaid-tag-${f.unit_number}`}
+                      title={`Prepaid — same date covers ${f.prepayment_months} months`}
+                      className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-[#F0FDF4] text-[#166534] border border-[#166534]/20"
+                    >
+                      Prepaid
+                    </span>
+                  ) : null}
+                </td>
                 <td className="px-6 py-4">
                   <select
                     data-testid={`fee-method-${f.unit_number}`}

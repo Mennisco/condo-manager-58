@@ -445,6 +445,18 @@ async def list_fees(year: Optional[int] = None, month: Optional[int] = None, use
     out = []
     async for f in db.fee_payments.find(q).sort([("period_year", -1), ("period_month", -1), ("unit_number", 1)]):
         out.append(_ser(f))
+    # Mark prepaid: paid rows whose (unit_id, paid_date) is shared by >1 row anywhere
+    paid_keys = [(r["unit_id"], r.get("paid_date")) for r in out if r.get("paid") and r.get("paid_date")]
+    if paid_keys:
+        # Count occurrences across the entire collection (not just the current filter)
+        unique_keys = set(paid_keys)
+        for uid, pd in unique_keys:
+            cnt = await db.fee_payments.count_documents({"unit_id": uid, "paid_date": pd, "paid": True})
+            if cnt > 1:
+                for r in out:
+                    if r["unit_id"] == uid and r.get("paid_date") == pd:
+                        r["prepaid"] = True
+                        r["prepayment_months"] = cnt
     return out
 
 
