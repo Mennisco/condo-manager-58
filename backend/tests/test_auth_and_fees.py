@@ -135,3 +135,75 @@ class TestLogout:
         # After logout, /auth/me should reject
         r = s.get(f"{BASE_URL}/api/auth/me")
         assert r.status_code in (401, 403)
+
+
+# ---------- Bearer-only auth (NO cookies) ----------
+# This proves the iframe-friendly auth path: localStorage token + Authorization
+# header should be sufficient even when third-party cookies are blocked.
+class TestBearerOnlyAuth:
+    def test_login_returns_access_token_in_body(self):
+        r = requests.post(f"{BASE_URL}/api/auth/login",
+                          json={"email": EMAIL, "password": PASSWORD})
+        assert r.status_code == 200
+        body = r.json()
+        assert "access_token" in body, "login response must contain access_token in body"
+        token = body["access_token"]
+        assert isinstance(token, str) and len(token) > 20
+        # JWT format: 3 segments separated by '.'
+        assert token.count(".") == 2
+
+    def test_auth_me_with_bearer_only_no_cookies(self):
+        # 1) Login and grab the token
+        login = requests.post(f"{BASE_URL}/api/auth/login",
+                              json={"email": EMAIL, "password": PASSWORD})
+        assert login.status_code == 200
+        token = login.json()["access_token"]
+        # 2) Fresh client (no cookie jar) + only Authorization header
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(f"{BASE_URL}/api/auth/me", headers=headers)
+        assert r.status_code == 200, f"Bearer auth /me failed: {r.status_code} {r.text}"
+        u = r.json()
+        assert u["email"] == EMAIL
+        assert u.get("role") == "admin"
+
+    def test_dashboard_summary_with_bearer_only_no_cookies(self):
+        login = requests.post(f"{BASE_URL}/api/auth/login",
+                              json={"email": EMAIL, "password": PASSWORD})
+        token = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(f"{BASE_URL}/api/dashboard/summary", headers=headers)
+        assert r.status_code == 200
+        assert isinstance(r.json(), dict)
+
+    def test_fees_with_bearer_only_no_cookies(self):
+        login = requests.post(f"{BASE_URL}/api/auth/login",
+                              json={"email": EMAIL, "password": PASSWORD})
+        token = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(f"{BASE_URL}/api/fees",
+                         params={"year": 2023, "month": 3}, headers=headers)
+        assert r.status_code == 200
+        rows = r.json() if isinstance(r.json(), list) else r.json().get("fees", [])
+        assert len(rows) > 0
+
+    def test_bearer_invalid_token_rejected(self):
+        headers = {"Authorization": "Bearer not-a-real-token"}
+        r = requests.get(f"{BASE_URL}/api/auth/me", headers=headers)
+        assert r.status_code == 401
+
+    def test_unit_613_no_trailing_space_in_unit_number(self):
+        """Regression: unit_number values should NOT have trailing whitespace,
+        so the data-testid 'waive-late-fee-613' (without trailing space) matches."""
+        login = requests.post(f"{BASE_URL}/api/auth/login",
+                              json={"email": EMAIL, "password": PASSWORD})
+        token = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        r = requests.get(f"{BASE_URL}/api/fees",
+                         params={"year": 2023, "month": 3}, headers=headers)
+        assert r.status_code == 200
+        rows = r.json() if isinstance(r.json(), list) else r.json().get("fees", [])
+        for row in rows:
+            unit = row.get("unit_number") or row.get("unit") or ""
+            assert unit == str(unit).strip(), (
+                f"unit_number has trailing/leading whitespace: {unit!r}"
+            )

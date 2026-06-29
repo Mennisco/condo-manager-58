@@ -1,0 +1,60 @@
+{
+  "summary": "Full backend + UI verification of Bearer-token (localStorage) auth fix for the cross-origin preview iframe. 14/14 pytest cases pass, including 6 new Bearer-only-auth tests proving /api/auth/me, /api/dashboard/summary and /api/fees succeed with ONLY 'Authorization: Bearer <token>' and an empty cookie jar. Browser E2E confirms: login lands on Dashboard (no bounce); io_access_token (215-char JWT) stored in localStorage; after page.context.clear_cookies() AND a reload of '/', the dashboard still loads (Bearer-from-localStorage works exactly as designed for the cross-origin iframe); in-browser fetch('/api/auth/me', {credentials:'omit', Authorization: 'Bearer ...'}) returns 200 with the correct email; logout clears io_access_token, redirects to /login, and revisiting '/' redirects back to /login. Fees regression: data-testid 'waive-late-fee-613' now matches WITHOUT trailing space (count=1, dirty variant count=0), Late Fees stat=$34.59, Total Due=$916.59, Late Fee column present, Unit 613 row shows $34.59 + WAIVE.",
+  "backend_tested": [
+    "POST /api/auth/login returns access_token in JSON body (3-segment JWT, len>20)",
+    "POST /api/auth/login still sets HttpOnly; Secure; SameSite=none cookies as fallback",
+    "GET /api/auth/me with Authorization: Bearer <token> only (no cookies) -> 200 + correct email/role",
+    "GET /api/dashboard/summary with Bearer only -> 200 + dict",
+    "GET /api/fees?year=2023&month=3 with Bearer only -> 200 with rows",
+    "GET /api/auth/me with Bearer 'not-a-real-token' -> 401",
+    "Unit 613 March 2023 -> late_fee=34.59 (regression)",
+    "unit_number values now strip trailing whitespace (regression from iteration_8)",
+    "Cookie-jar session persistence + logout still work (legacy cookie path)"
+  ],
+  "frontend_tested": [
+    "/login -> fill creds -> click login-submit -> /dashboard mounts (no bounce)",
+    "localStorage.io_access_token populated (len=215) after login",
+    "page.context.clear_cookies() + reload '/' keeps user on dashboard (Bearer-only path)",
+    "In-browser fetch('/api/auth/me', credentials:'omit', Authorization: Bearer) -> {ok:true, email:innsbruckone@gmail.com}",
+    "Sign out -> localStorage.io_access_token removed (null)",
+    "Sign out -> redirect to /login",
+    "Re-visit '/' after logout -> redirect to /login (route guard works)",
+    "Fees 2023-March: waive-late-fee-613 (clean) count=1, trailing-space variant count=0",
+    "fees-stat-latefees shows $34.59, Total Due tile shows $916.59, Late Fee column header present, Unit 613 row shows $34.59 + WAIVE"
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts width(-1)/height(-1) console warnings still emitted on first render of Monthly Cashflow / Expenses-by-Category. Cosmetic only; no functional impact. Suggest setting min width/height or aspect on ResponsiveContainer."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_and_fees.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None required for the reported bug fix — Bearer-token auth via localStorage is fully working end-to-end inside the cross-origin preview context.",
+    "(Optional, cosmetic) Silence Recharts width(-1)/height(-1) warnings on Dashboard."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:311-321 login() correctly returns access_token in body AND sets cookies (dual-mode auth). Good.",
+    "/app/backend/server.py:280-301 get_current_user() correctly checks cookie first, then falls back to 'Authorization: Bearer' header. Good.",
+    "/app/frontend/src/lib/api.js request interceptor reads localStorage TOKEN_KEY='io_access_token' and attaches Authorization on EVERY request — works regardless of cookie state. Good.",
+    "/app/frontend/src/contexts/AuthContext.jsx login() stores data.access_token in localStorage and logout() removes it. Good.",
+    "Minor: api.js SILENT_401_PATHS includes '/auth/me' and '/auth/login'; that's correct (avoids redirect storms on initial bootstrap).",
+    "Note: after logout() the legacy cookies remain Set-Cookie-cleared by /api/auth/logout, AND localStorage is wiped client-side — both auth channels are closed.",
+    "Seed/serializer trailing-whitespace fix on unit_number now confirmed in API response — waive-late-fee-<unit> selectors are clean."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_and_fees.py (added TestBearerOnlyAuth class with 6 new tests covering bearer login response, bearer-only /auth/me, /dashboard/summary, /fees, invalid token, and unit_number trim regression)"
+  ],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% on all critical flows; only Recharts cosmetic warning remains"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne (admin) — from /app/memory/test_credentials.md, working",
+  "seed_data_creation": "None — used existing seed",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Auth is now dual-mode: cookies (HttpOnly; Secure; SameSite=none) AND Bearer-token from localStorage key 'io_access_token'. The login response body contains access_token. Frontend axios interceptor in /app/frontend/src/lib/api.js attaches Authorization Bearer from localStorage on every request, and 401 handler removes the token and triggers onUnauthorized() to redirect to /login. Tests at /app/backend/tests/test_auth_and_fees.py cover both auth paths (14 tests, all passing). Useful UI selectors: login-form, login-email, login-password, login-submit, dashboard-page, nav-fees, fees-page, fee-year (input), fee-month (NATIVE <select> — use page.select_option(..., '3') for March), fees-stat-latefees, fees-stat-total-due, waive-late-fee-613 (now clean, no trailing space). Sign-out trigger is a button with text 'Sign out' or data-testid 'logout-button' / 'sign-out'.",
+  "rca_of_the_issue": "Root cause: in the production cross-origin preview iframe (homeowner-hub-11.preview.emergentagent.com embedded in a different origin), modern browsers block third-party cookies, so the SameSite=None;Secure cookie from iteration_8 still wasn't always delivered with subsequent /auth/me calls. Fix: switch to Bearer-token auth in addition to cookies. Backend /api/auth/login returns access_token in the body; backend get_current_user already falls back to the Authorization: Bearer header (server.py:280-285). Frontend stores access_token in localStorage under 'io_access_token' (AuthContext.jsx:42) and attaches it via an axios request interceptor (lib/api.js:16-23) on every request, so cookies are not required. Verified: page.context.clear_cookies() followed by reload still loads the dashboard, and an in-browser fetch with credentials:'omit' and Authorization Bearer returns the authenticated user. Logout clears both: it calls /api/auth/logout (clears cookies server-side) and localStorage.removeItem(TOKEN_KEY). The fix is complete and confirmed end-to-end."
+}

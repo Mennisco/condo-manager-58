@@ -9,6 +9,19 @@ const api = axios.create({
   timeout: 15000,
 });
 
+// Token-based auth: cookies are unreliable inside the embedded preview iframe
+// (third-party cookies are blocked by modern browsers), so we also send the
+// access token via the Authorization header from localStorage.
+export const TOKEN_KEY = "io_access_token";
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // Endpoints that are *expected* to 401 when the user isn't logged in.
 // We don't redirect on these — the AuthContext handles them gracefully.
 const SILENT_401_PATHS = ["/auth/me", "/auth/login"];
@@ -27,6 +40,7 @@ api.interceptors.response.use(
     if (status === 401) {
       const silent = SILENT_401_PATHS.some((p) => url.includes(p));
       if (!silent) {
+        localStorage.removeItem(TOKEN_KEY);
         if (typeof onUnauthorized === "function") {
           try { onUnauthorized(); } catch (_) {}
         }

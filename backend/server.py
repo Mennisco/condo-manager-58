@@ -318,7 +318,7 @@ async def login(req: LoginReq, response: Response):
     access = create_access_token(uid, email)
     refresh = create_refresh_token(uid)
     set_auth_cookies(response, access, refresh)
-    return {"id": uid, "email": email, "name": user["name"], "role": user.get("role", "admin")}
+    return {"id": uid, "email": email, "name": user["name"], "role": user.get("role", "admin"), "access_token": access}
 
 
 @api.post("/auth/logout")

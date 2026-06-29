@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import api, { formatApiError, setUnauthorizedHandler } from "@/lib/api";
+import api, { formatApiError, setUnauthorizedHandler, TOKEN_KEY } from "@/lib/api";
 
 const AuthContext = createContext(null);
 
@@ -39,6 +39,7 @@ export function AuthProvider({ children }) {
     setError("");
     try {
       const { data } = await api.post("/auth/login", { email, password });
+      if (data.access_token) localStorage.setItem(TOKEN_KEY, data.access_token);
       setUser(data);
       return true;
     } catch (e) {
@@ -51,6 +52,7 @@ export function AuthProvider({ children }) {
     try {
       await api.post("/auth/logout");
     } catch (_) {}
+    localStorage.removeItem(TOKEN_KEY);
     setUser(false);
   };
 
