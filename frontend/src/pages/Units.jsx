@@ -10,6 +10,7 @@ const empty = {
   owner_email: "",
   owner_phone: "",
   monthly_fee: 0,
+  late_fee: 0,
   notes: "",
 };
 
@@ -24,7 +25,7 @@ export default function Units() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
-    const body = { ...form, monthly_fee: parseFloat(form.monthly_fee) || 0 };
+    const body = { ...form, monthly_fee: parseFloat(form.monthly_fee) || 0, late_fee: parseFloat(form.late_fee) || 0 };
     try {
       if (editing) {
         await api.put(`/units/${editing}`, body);
@@ -50,6 +51,7 @@ export default function Units() {
       owner_email: u.owner_email || "",
       owner_phone: u.owner_phone || "",
       monthly_fee: u.monthly_fee || 0,
+      late_fee: u.late_fee || 0,
       notes: u.notes || "",
     });
     setOpen(true);
@@ -88,12 +90,13 @@ export default function Units() {
               <th className="px-6 py-3">Email</th>
               <th className="px-6 py-3">Phone</th>
               <th className="px-6 py-3 text-right">Monthly Fee</th>
+              <th className="px-6 py-3 text-right">Late Fee</th>
               <th className="px-6 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {units.length === 0 ? (
-              <tr><td colSpan={6} className="px-6 py-12 text-center text-[#78716C]">
+              <tr><td colSpan={7} className="px-6 py-12 text-center text-[#78716C]">
                 <Home size={24} className="mx-auto mb-2 opacity-50" />
                 No units yet. Add your first unit to get started.
               </td></tr>
@@ -104,6 +107,7 @@ export default function Units() {
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_email || "—"}</td>
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_phone || "—"}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(u.monthly_fee)}</td>
+                <td className="px-6 py-4 text-right tabular-nums text-[#78716C]">{fmtMoney(u.late_fee)}</td>
                 <td className="px-6 py-4 text-right relative">
                   <RowMenu
                     unit={u}
@@ -130,6 +134,9 @@ export default function Units() {
               </Field>
               <Field label="Monthly fee">
                 <input data-testid="unit-fee-input" type="number" step="0.01" value={form.monthly_fee} onChange={(e) => setForm({ ...form, monthly_fee: e.target.value })} className={inp} />
+              </Field>
+              <Field label="Late fee (past the 10th)">
+                <input data-testid="unit-late-fee-input" type="number" step="0.01" value={form.late_fee} onChange={(e) => setForm({ ...form, late_fee: e.target.value })} className={inp} />
               </Field>
               <Field label="Owner name" required>
                 <input data-testid="unit-owner-input" required value={form.owner_name} onChange={(e) => setForm({ ...form, owner_name: e.target.value })} className={inp} />

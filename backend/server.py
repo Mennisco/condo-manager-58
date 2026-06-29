@@ -96,6 +96,7 @@ class Unit(BaseDoc):
     owner_email: Optional[str] = None
     owner_phone: Optional[str] = None
     monthly_fee: float = 0.0
+    late_fee: float = 0.0
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -106,6 +107,7 @@ class UnitIn(BaseModel):
     owner_email: Optional[str] = None
     owner_phone: Optional[str] = None
     monthly_fee: float = 0.0
+    late_fee: float = 0.0
     notes: Optional[str] = None
 
 
@@ -120,6 +122,7 @@ class FeePayment(BaseDoc):
     paid: bool = False
     paid_date: Optional[str] = None
     method: Optional[str] = None  # check / zelle / cash / other
+    late_fee_waived: bool = False
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -133,6 +136,7 @@ class FeePaymentIn(BaseModel):
     paid: bool = False
     paid_date: Optional[str] = None
     method: Optional[str] = None
+    late_fee_waived: bool = False
     notes: Optional[str] = None
 
 
@@ -445,6 +449,28 @@ async def list_fees(year: Optional[int] = None, month: Optional[int] = None, use
     out = []
     async for f in db.fee_payments.find(q).sort([("period_year", -1), ("period_month", -1), ("unit_number", 1)]):
         out.append(_ser(f))
+    # Late-fee enrichment: a unit's late fee applies if a month's payment isn't made
+    # by the 10th of that month (and hasn't been waived).
+    late_map = {}
+    async for u in db.units.find({}, {"late_fee": 1}):
+        late_map[str(u["_id"])] = float(u.get("late_fee", 0) or 0)
+    today = datetime.now(timezone.utc).date()
+    for r in out:
+        lf = late_map.get(r["unit_id"], 0.0)
+        r["late_fee"] = lf
+        applies = False
+        if lf > 0 and not r.get("late_fee_waived"):
+            due_by = datetime(r["period_year"], r["period_month"], 10).date()
+            if r.get("paid") and r.get("paid_date"):
+                try:
+                    pd = datetime.fromisoformat(r["paid_date"].replace("Z", "+00:00")).date()
+                    applies = pd > due_by
+                except Exception:
+                    applies = False
+            elif not r.get("paid"):
+                applies = today > due_by
+        r["late_fee_applied"] = applies
+        r["total_due"] = round(float(r.get("amount_due", 0)) + (lf if applies else 0.0), 2)
     # Mark prepaid: paid rows whose (unit_id, paid_date) is shared by >1 row anywhere
     paid_keys = [(r["unit_id"], r.get("paid_date")) for r in out if r.get("paid") and r.get("paid_date")]
     if paid_keys:
@@ -504,7 +530,7 @@ async def create_fee(data: FeePaymentIn, user=Depends(get_current_user)):
 
 @api.put("/fees/{fee_id}")
 async def update_fee(fee_id: str, data: dict, user=Depends(get_current_user)):
-    allowed = {"amount_due", "amount_paid", "paid", "paid_date", "method", "notes"}
+    allowed = {"amount_due", "amount_paid", "paid", "paid_date", "method", "late_fee_waived", "notes"}
     update = {k: v for k, v in data.items() if k in allowed}
     if "paid" in update and update["paid"] and not update.get("paid_date"):
         update["paid_date"] = now_iso()

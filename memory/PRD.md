@@ -49,10 +49,15 @@ in a simple, easy-to-use app that I can hand off to the next president or treasu
 - **P2**: Multi-user invite flow UI for board members (endpoint exists, no UI yet).
 - **P3**: AI assist for drafting emails / budget suggestions (user declined initially).
 
+## Implemented (June 2026)
+- **Per-unit Late Fee**: `late_fee` field on Unit (editable in Units page; = 25% of dues per spreadsheet Fee Incr. Calc. H27-H36 → 601/603/617/619=$30, 605/615=$24.83, 607/609/611/613=$34.59). GET /api/fees enriches each row with `late_fee`, `late_fee_applied` (applies when paid after / unpaid past the 10th of the month), and `total_due`. Per-row Waive toggle (`late_fee_waived`, PUT /api/fees). Fees page shows Late Fee column + Late Fees stat + late fee folded into Total Due.
+- **Imported 2023-2025 fee history** (360 rows) from "Mo. Fees Log" tab: exact deposit dates, paid where a date exists / unpaid where blank, Prepaid logic via shared paid_date. 2026 data untouched. Idempotent import script: `/app/backend/import_history.py`.
+
 ## Next Tasks
-1. Drill-down: click a unit on the dashboard → year-long payment history & balance owed.
-2. CSV export buttons on Expenses and Fees pages.
-3. Receipt/document attachments (object storage).
+1. Phase B import: Expenses (Paid Expenses tab → add `date_paid`), Budget tab, Fee Increase Worksheet page.
+2. Drill-down: click a unit on the dashboard → year-long payment history & balance owed.
+3. CSV export buttons on Expenses and Fees pages.
+4. Receipt/document attachments (object storage).
 
 ## Credentials
 See `/app/memory/test_credentials.md`. Default admin: `treasurer@condoassoc.org` / `treasurer123`.
