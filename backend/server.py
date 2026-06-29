@@ -273,8 +273,8 @@ def create_refresh_token(uid: str) -> str:
 
 
 def set_auth_cookies(resp: Response, access: str, refresh: str):
-    resp.set_cookie("access_token", access, httponly=True, secure=False, samesite="lax", max_age=ACCESS_MIN * 60, path="/")
-    resp.set_cookie("refresh_token", refresh, httponly=True, secure=False, samesite="lax", max_age=REFRESH_DAYS * 86400, path="/")
+    resp.set_cookie("access_token", access, httponly=True, secure=True, samesite="none", max_age=ACCESS_MIN * 60, path="/")
+    resp.set_cookie("refresh_token", refresh, httponly=True, secure=True, samesite="none", max_age=REFRESH_DAYS * 86400, path="/")
 
 
 async def get_current_user(request: Request) -> dict:
@@ -346,7 +346,7 @@ async def refresh_token(request: Request, response: Response):
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         access = create_access_token(str(user["_id"]), user["email"])
-        response.set_cookie("access_token", access, httponly=True, secure=False, samesite="lax", max_age=ACCESS_MIN * 60, path="/")
+        response.set_cookie("access_token", access, httponly=True, secure=True, samesite="none", max_age=ACCESS_MIN * 60, path="/")
         return {"ok": True}
     except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid refresh token")

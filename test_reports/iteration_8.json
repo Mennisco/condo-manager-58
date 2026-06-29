@@ -1,0 +1,62 @@
+{
+  "summary": "Full backend + UI verification after SameSite=None;Secure cookie fix. All 8 pytest cases pass. Browser e2e confirmed: login → dashboard (no bounce), session persists across full page reload, /api/auth/me + /api/dashboard/summary + /api/fees succeed under cookie auth, logout redirects to /login and protected routes redirect when re-visited. Fees 2023-March regression OK: Late Fee column present, Unit 613 (Earl Rogers) shows $34.59 late fee with WAIVE control, Late Fees stat=$34.59, Total Due=$916.59 (includes the late fee). The user-reported 'bounced back to login' bug is FIXED.",
+  "backend_tested": [
+    "POST /api/auth/login returns 200 + Set-Cookie access_token/refresh_token with HttpOnly; SameSite=none; Secure (verified via curl AND requests)",
+    "POST /api/auth/login with wrong password returns 401",
+    "GET /api/auth/me with cookie session returns admin user innsbruckone@gmail.com",
+    "GET /api/dashboard/summary returns data object",
+    "GET /api/fees?year=2023&month=3 returns 10 rows",
+    "Unit 613 March 2023 row has late_fee=34.59, late_fee_applied=true, total_due=134.59, paid_date=2023-09-28 — matches spec exactly",
+    "Cookie jar in same requests.Session persists across 3 sequential authenticated calls",
+    "POST /api/auth/logout clears cookies; subsequent /api/auth/me returns 401"
+  ],
+  "frontend_tested": [
+    "/login renders login-form, login-email, login-password, login-submit",
+    "Clicking login-submit with correct creds redirects to '/' and dashboard-page mounts",
+    "current-user-email sidebar shows innsbruckone@gmail.com",
+    "Hard navigate to '/' after login keeps user authenticated (session persisted via httpOnly cookies)",
+    "nav-fees → fees-page loads; setting fee-year=2023 + fee-month=3 reloads table with 2023-March data",
+    "Late Fee column header present; Unit 613 row shows $34.59 with WAIVE button",
+    "fees-stat-latefees = 'Late Fees$34.59'; Total Due tile = $916.59 (includes late fee)",
+    "Sign out → redirected to /login; revisiting '/' redirects back to /login"
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "Fees.jsx Waive button",
+        "issue": "data-testid is 'waive-late-fee-613 ' (TRAILING SPACE) because seed-data unit_number is stored as '613 ' with trailing whitespace. Functionally the WAIVE button renders & is clickable, but the documented test selector '[data-testid=\"waive-late-fee-613\"]' fails to match. All unit_number values (601, 603, 605, 607, 609, 611, 613, 615, 617, 619) have the same trailing space except 601/603/611.",
+        "selector": "[data-testid=\"waive-late-fee-613\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Recharts width/height(-1) warnings spam console on first render — Monthly Cashflow / Expenses-by-Category containers lack initial width before responsive measurement; cosmetic only."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_and_fees.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "Strip trailing whitespace from unit_number on read (or fix seed) so waive-late-fee-<unit> data-testid is clean. Tiny fix: replace `f.unit_number` with `String(f.unit_number).trim()` in the testid template (frontend) OR strip in the API/seed.",
+    "(Optional) Address Recharts width(-1)/height(-1) console warnings on Dashboard by setting min width/height on ResponsiveContainer or providing aspect ratio.",
+    "No backend action needed — cookie fix (SameSite=none; Secure) is confirmed working end-to-end."
+  ],
+  "critical_code_review_comments": [
+    "Cookie fix in /app/backend/server.py (lines 275-277 & 349) correctly applies httponly=True, secure=True, samesite='none' — required for cross-site iframe (preview) HTTPS contexts.",
+    "Seed data quality: unit_number strings contain trailing spaces ('605 ', '607 ', '613 ', etc.). Recommend normalizing at ingest or in the API serializer.",
+    "Login response shape is {id, email, name, role} (flat), not {user: {...}} — verify frontend AuthContext expects this shape (it does, used as setUser(data))."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_and_fees.py (new)"
+  ],
+  "success_rate": {"backend": "100% (8/8)", "frontend": "100% on critical flows; 1 cosmetic data-testid issue"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne (admin) — from /app/memory/test_credentials.md, verified working",
+  "seed_data_creation": "None — used existing seed",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Cookie auth (SameSite=None;Secure) works in the preview iframe. Pytest suite at /app/backend/tests/test_auth_and_fees.py covers login + cookie attrs + /auth/me + dashboard + fees + late-fee regression + session persistence + logout. Frontend selectors confirmed: login-form, login-email, login-password, login-submit, dashboard-page, current-user-email, nav-fees, fees-page, fee-year (number input), fee-month (select), fees-stat-latefees, waive-late-fee-<unit_number> (NOTE trailing space on most unit_numbers).",
+  "rca_of_the_issue": "Root cause of user's 'bounced back to login' was that browser dropped the access_token cookie because it was Set with SameSite=Lax;Secure=False inside an HTTPS cross-site iframe (the preview UI). Modern browsers require SameSite=None;Secure for any cookie to be sent in such cross-site contexts. The fix in set_auth_cookies() (server.py:275-277) and the /api/auth/refresh path (server.py:349) now sets secure=True, samesite='none', httponly=True. Verified via curl that Set-Cookie now reads 'HttpOnly; SameSite=none; Secure' and via browser that login → dashboard navigation persists and survives a reload."
+}
