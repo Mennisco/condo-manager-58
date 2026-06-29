@@ -53,15 +53,15 @@ export default function Dashboard() {
 
   return (
     <div data-testid="dashboard-page" className="space-y-8">
-      <div className="relative h-48 md:h-56 rounded-lg overflow-hidden border border-[#E7E5E4]">
+      <div className="relative h-72 md:h-96 rounded-lg overflow-hidden border border-[#E7E5E4]">
         <img
           src="https://customer-assets.emergentagent.com/job_assoc-admin-3/artifacts/k5io5897_I1clean.png"
           alt="Innsbruck One"
-          className="absolute inset-0 w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover object-center"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[#166534]/70 via-[#166534]/30 to-transparent" />
-        <div className="absolute bottom-5 left-6 text-white">
-          <div className="text-xs uppercase tracking-[0.15em] font-bold opacity-80">Innsbruck One</div>
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/65 via-black/25 to-transparent" />
+        <div className="absolute bottom-5 left-6 text-white drop-shadow-md">
+          <div className="text-xs uppercase tracking-[0.15em] font-bold opacity-90">Innsbruck One</div>
           <div className="font-display text-2xl md:text-3xl font-bold mt-1">Treasurer Dashboard</div>
         </div>
       </div>
