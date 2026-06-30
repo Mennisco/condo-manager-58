@@ -144,7 +144,18 @@ export default function Expenses() {
                 <td className="px-6 py-4">{fmtDate(x.date)}</td>
                 <td className="px-6 py-4">{x.category}</td>
                 <td className="px-6 py-4 text-[#78716C]">{x.vendor || "—"}</td>
-                <td className="px-6 py-4">{x.description}</td>
+                <td className="px-6 py-4 max-w-xs">
+                  <div>{x.description}</div>
+                  {x.notes && x.notes !== "Imported from spreadsheet" ? (
+                    <div
+                      data-testid={`expense-note-${x.id}`}
+                      title={x.notes}
+                      className="text-xs text-[#78716C] mt-1 whitespace-pre-line line-clamp-3"
+                    >
+                      {x.notes}
+                    </div>
+                  ) : null}
+                </td>
                 <td className="px-6 py-4 text-right tabular-nums font-semibold">{fmtMoney(x.amount)}</td>
                 <td className="px-6 py-4 text-right">
                   <button data-testid={`edit-expense-${x.id}`} onClick={() => onEdit(x)} className="text-[#166534] mr-3"><Pencil size={16} /></button>

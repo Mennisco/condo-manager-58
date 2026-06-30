@@ -56,6 +56,7 @@ in a simple, easy-to-use app that I can hand off to the next president or treasu
 ## Implemented (June 2026) — Phase B
 - **Imported Paid Expenses** (2023/2024/2025, ~125 rows) from the spreadsheet matrix — one expense per category per month, dated the 1st (month-level granularity). Categories normalized (Mowing, Snow Removal, Utilities, Insurance, Bank/Accounting, Maintenance, Window Washing, Landscaping, Trash Removal, Other). Script: `/app/backend/import_phase_b.py`. Year totals match spreadsheet (2023=$7,370.83, 2024=$17,677.27, 2025=$9,607.40).
 - **Imported Budgets** 2024/2025/2026/2027 (category totals → budget_items). 2026 total = $14,693.75.
+- **Expense cell-comment notes**: re-imported expenses now carry the spreadsheet's embedded cell comments (vendor/payment detail, 21 notes) into the expense `notes` field, shown under the description on the Expenses page. Also imported 2026 & 2027 "Actual" expense blocks (~160 expense rows total). Vendor field left blank per user (full text kept in Notes).
 - **Expense.date_paid** field added (optional; blank on import, editable in the Expenses modal).
 - **Unit.ownership_pct** added (decimal fraction, sums to 1.0). Seeded from Fee Incr. Calc. column D.
 - **Fee Increase Worksheet** (`/fee-increase`, nav "Fee Increase"): interactive calculator — enter target annual budget → per-unit new monthly dues = (target/12) × ownership_pct, monthly increase, new late fee = 25% of new dues. "Apply new fees to units" (admin-only POST /api/units/apply-fees) writes new monthly_fee + late_fee to each unit.

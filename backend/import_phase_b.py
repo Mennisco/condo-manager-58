@@ -40,8 +40,10 @@ CAT = {
     "landscaping": "Landscaping", "trash removal": "Trash Removal",
     "other": "Other",
 }
-exp_blocks = [(2023, 3, 10), (2024, 18, 26), (2025, 33, 41)]
+exp_blocks = [(2023, 3, 10), (2024, 18, 26), (2025, 33, 41), (2026, 48, 56), (2027, 63, 71)]
 pe = wb["Paid Expenses"]
+wb_c = openpyxl.load_workbook("/tmp/innsbruck.xlsx")  # with cell comments
+pe_c = wb_c["Paid Expenses"]
 db.expenses.delete_many({"source": "xlsx_paid_expenses"})
 created = 0
 for year, r0, r1 in exp_blocks:
@@ -51,8 +53,12 @@ for year, r0, r1 in exp_blocks:
             continue
         category = CAT.get(str(label).strip().lower(), str(label).strip().title())
         for m in range(1, 13):
-            val = pe.cell(row=r, column=1 + m).value  # B=2 (Jan) .. M=13 (Dec)
+            col = 1 + m  # B=2 (Jan) .. M=13 (Dec)
+            val = pe.cell(row=r, column=col).value
+            comment = pe_c.cell(row=r, column=col).comment
+            note_text = comment.text.strip() if comment and comment.text else None
             if val is None:
+                # A note may exist on a cell with no numeric amount — skip (no expense to attach to)
                 continue
             try:
                 amt = float(val)
@@ -68,7 +74,7 @@ for year, r0, r1 in exp_blocks:
                 "amount": round(amt, 2),
                 "method": None,
                 "date_paid": None,
-                "notes": "Imported from spreadsheet",
+                "notes": note_text or "Imported from spreadsheet",
                 "source": "xlsx_paid_expenses",
                 "created_at": None,
             })
