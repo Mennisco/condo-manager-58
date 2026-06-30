@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, todayISO } from "@/lib/utils";
-import { Plus, Pencil, Trash2, X, Receipt } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Receipt, Search } from "lucide-react";
 import { toast } from "sonner";
 
 const CATEGORIES = [
@@ -108,8 +108,31 @@ export default function Expenses() {
         </div>
         <div className="flex gap-3 items-end">
           <div>
+            <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C] mb-1.5">Search</div>
+            <div className="relative">
+              <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#A8A29E]" />
+              <input
+                data-testid="expense-search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Vendor, keyword, category…"
+                className={`${inp} pl-8 w-64`}
+              />
+              {query ? (
+                <button
+                  data-testid="expense-search-clear"
+                  onClick={() => setQuery("")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#A8A29E] hover:text-[#1C1917]"
+                  title="Clear search"
+                >
+                  <X size={15} />
+                </button>
+              ) : null}
+            </div>
+          </div>
+          <div>
             <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C] mb-1.5">Year</div>
-            <input data-testid="expense-year" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className={`${inp} w-24`} />
+            <input data-testid="expense-year" type="number" value={year} disabled={!!q} onChange={(e) => setYear(Number(e.target.value))} className={`${inp} w-24 disabled:opacity-50`} />
           </div>
           <button
             data-testid="add-expense-btn"
@@ -123,9 +146,9 @@ export default function Expenses() {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white border border-[#E7E5E4] rounded-lg p-6 md:col-span-1">
-          <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">Total · {year}</div>
+          <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">{q ? "Search total · all years" : `Total · ${year}`}</div>
           <div className="font-display text-3xl font-bold mt-3 tabular-nums">{fmtMoney(total)}</div>
-          <div className="text-xs text-[#78716C] mt-1">{items.length} entries</div>
+          <div className="text-xs text-[#78716C] mt-1">{displayed.length} {q ? "match(es)" : "entries"}</div>
         </div>
         <div className="bg-white border border-[#E7E5E4] rounded-lg p-6 md:col-span-2">
           <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C] mb-3">By Category</div>
@@ -157,12 +180,12 @@ export default function Expenses() {
             </tr>
           </thead>
           <tbody>
-            {items.length === 0 ? (
+            {displayed.length === 0 ? (
               <tr><td colSpan={6} className="px-6 py-12 text-center text-[#78716C]">
                 <Receipt size={24} className="mx-auto mb-2 opacity-50" />
-                No expenses for {year}.
+                {q ? `No expenses match “${query}”.` : `No expenses for ${year}.`}
               </td></tr>
-            ) : items.map((x) => (
+            ) : displayed.map((x) => (
               <tr key={x.id} data-testid={`expense-row-${x.id}`} className="border-t border-[#E7E5E4] hover:bg-[#F5F5F4]">
                 <td className="px-6 py-4">{fmtDate(x.date)}</td>
                 <td className="px-6 py-4">{x.category}</td>
