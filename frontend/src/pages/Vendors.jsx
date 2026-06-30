@@ -3,10 +3,10 @@ import api from "@/lib/api";
 import { Plus, Pencil, Trash2, X, Mail, Phone } from "lucide-react";
 import { toast } from "sonner";
 
-const empty = { name: "", service: "", category: "", contact_name: "", email: "", phone: "", notes: "" };
+const empty = { name: "", service: "", categories: [], contact_name: "", email: "", phone: "", notes: "" };
 
 const CATEGORIES = [
-  "", "Utilities", "Insurance", "Landscaping", "Mowing", "Snow Removal", "Trash Removal",
+  "Utilities", "Insurance", "Landscaping", "Mowing", "Snow Removal", "Trash Removal",
   "Maintenance", "Window Washing", "Bank/Accounting", "Cleaning", "Pest Control",
   "Property Management", "Legal & Accounting", "Taxes & Filings", "Other",
 ];
@@ -28,7 +28,7 @@ export default function Vendors() {
     setOpen(false); setEditing(null); setForm(empty); load();
   };
 
-  const onEdit = (v) => { setEditing(v.id); setForm({ name: v.name, service: v.service || "", category: v.category || "", contact_name: v.contact_name || "", email: v.email || "", phone: v.phone || "", notes: v.notes || "" }); setOpen(true); };
+  const onEdit = (v) => { setEditing(v.id); setForm({ name: v.name, service: v.service || "", categories: v.categories || (v.category ? [v.category] : []), contact_name: v.contact_name || "", email: v.email || "", phone: v.phone || "", notes: v.notes || "" }); setOpen(true); };
   const onDelete = async (id) => { if (!confirm("Delete vendor?")) return; await api.delete(`/vendors/${id}`); load(); };
 
   return (
@@ -55,10 +55,14 @@ export default function Vendors() {
               <div>
                 <div className="font-display text-lg font-semibold">{v.name}</div>
                 <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#166534] mt-1">{v.service || "—"}</div>
-                {v.category ? (
-                  <span data-testid={`vendor-category-${v.id}`} className="inline-block mt-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-[#F5F5F4] text-[#78716C] border border-[#E7E5E4]">
-                    {v.category}
-                  </span>
+                {(v.categories && v.categories.length > 0) ? (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {v.categories.map((cat) => (
+                      <span key={cat} data-testid={`vendor-category-${v.id}-${cat}`} className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-[#F5F5F4] text-[#78716C] border border-[#E7E5E4]">
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
                 ) : null}
               </div>
               <div className="flex gap-2">
@@ -86,10 +90,28 @@ export default function Vendors() {
             <div className="grid grid-cols-2 gap-4">
               <Field label="Name" required><input data-testid="vendor-name" required value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={inp} /></Field>
               <Field label="Service"><input data-testid="vendor-service" value={form.service} onChange={(e) => setForm({ ...form, service: e.target.value })} className={inp} /></Field>
-              <Field label="Expense category">
-                <select data-testid="vendor-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inp}>
-                  {CATEGORIES.map((c) => <option key={c} value={c}>{c || "—"}</option>)}
-                </select>
+              <Field label="Expense categories" full>
+                <div data-testid="vendor-categories" className="flex flex-wrap gap-2">
+                  {CATEGORIES.map((cat) => {
+                    const on = form.categories.includes(cat);
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        data-testid={`vendor-cat-toggle-${cat}`}
+                        onClick={() => setForm({
+                          ...form,
+                          categories: on ? form.categories.filter((x) => x !== cat) : [...form.categories, cat],
+                        })}
+                        className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${
+                          on ? "bg-[#166534] text-white border-[#166534]" : "bg-white text-[#78716C] border-[#E7E5E4] hover:border-[#166534]"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
               </Field>
               <Field label="Contact name"><input value={form.contact_name} onChange={(e) => setForm({ ...form, contact_name: e.target.value })} className={inp} /></Field>
               <Field label="Email"><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className={inp} /></Field>
