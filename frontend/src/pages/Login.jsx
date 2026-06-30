@@ -51,7 +51,7 @@ export default function Login() {
             </div>
             <div>
               <div className="font-display font-bold text-lg leading-none">Innsbruck One</div>
-              <div className="text-xs text-[#78716C] mt-1">Treasurer sign-in</div>
+              <div className="text-xs text-[#78716C] mt-1">Manager sign-in</div>
             </div>
           </div>
           <label className="block text-xs uppercase tracking-[0.15em] font-bold text-[#78716C] mb-2">

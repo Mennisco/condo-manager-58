@@ -54,6 +54,12 @@ function TrendStrip({ trends }) {
                   <span className="text-[#78716C]">Expenses</span>
                   <span className="tabular-nums font-semibold">{fmtMoney(t.expenses)}</span>
                 </div>
+                <div className="flex justify-between border-t border-[#E7E5E4] pt-2 mt-1">
+                  <span className="text-[#78716C]">Net</span>
+                  <span className={`tabular-nums font-semibold ${(t.collected - t.expenses) >= 0 ? "text-[#166534]" : "text-[#C53030]"}`}>
+                    {(t.collected - t.expenses) < 0 ? "(" + fmtMoney(Math.abs(t.collected - t.expenses)) + ")" : fmtMoney(t.collected - t.expenses)}
+                  </span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-[#78716C]">On-time</span>
                   <span className="tabular-nums font-semibold">{t.on_time_rate != null ? `${t.on_time_rate}%` : "—"}</span>
