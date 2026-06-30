@@ -1,0 +1,58 @@
+{
+  "summary": "Verified the new P&L Statement feature end-to-end (backend + frontend) and the related Annual Budget Print button and Dashboard banner rename. Backend: 6 new pytest cases for /api/reports/pnl added in /app/backend/tests/test_pnl.py — all pass. Full backend suite 34/34 passing. Frontend: every spec'd selector (pnl-page, pnl-period, pnl-year, pnl-start, pnl-end, pnl-basis-accrual, pnl-basis-cash, pnl-print-btn, pnl-total-income, pnl-total-expenses, pnl-net-income, pnl-exp-<cat>, budget-print-btn, nav-pnl) verified live against the preview URL.",
+  "backend_tested": [
+    "GET /api/reports/pnl?start=2025-01-01&end=2025-12-31&basis=accrual -> income.fees=13368.00, income.late_fees=49.66, income.total=13417.66, total_expenses=9607.40, total_budget=13665.00, net_income=3810.26, months=12 (matches spec exactly).",
+    "Mowing line in expense_lines: actual=1285.00, budget=1215.00, variance=-70.00 (over-budget) — UI renders red parentheses.",
+    "Basis toggle on 2026: accrual income $13,368.00 vs cash income $6,539.00 -> differ as expected (prepayments).",
+    "Budget proration: single-month (2025-06-01..2025-06-30) total_budget ~= annual/12.",
+    "Custom range (2025-03-15..2025-07-20) returns full response shape.",
+    "Unauthorized request (no token) -> 401/403."
+  ],
+  "frontend_tested": [
+    "Login innsbruckone@gmail.com / 1nn58ruck0ne -> Dashboard. Dashboard contains 'Innsbruck One Manager' and no longer contains 'Treasurer Dashboard'.",
+    "Sidebar nav-pnl visible and navigates to /pnl; pnl-page mounts.",
+    "Period=Full Year + year=2025 -> pnl-total-income $13,417.66, pnl-total-expenses $9,607.40, pnl-net-income $3,810.26.",
+    "pnl-exp-Mowing shows Actual $1,285.00, Budget $1,215.00, Variance ($70.00) with class text-[#C53030] (red parentheses).",
+    "Basis toggle changes 2026 income from $13,368.00 (accrual) to $6,539.00 (cash).",
+    "Period This Month / This Quarter / Year-to-Date all compute and render totals without error.",
+    "Custom range shows pnl-start / pnl-end date inputs and recalculates on change.",
+    "pnl-print-btn invokes window.print without JS error.",
+    "Annual Budget page budget-print-btn present and invokes window.print without JS error.",
+    "Vendors regression: JC Land Services card visible with both 'Mowing' and 'Snow Removal' badges (visually confirmed in screenshot)."
+  ],
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Pre-existing Recharts width(-1)/height(-1) warnings on first paint of Monthly Cashflow / Expenses-by-Category. Cosmetic; carried over from iteration_9/10."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_pnl.py",
+    "/app/test_reports/pytest/pnl_results.xml",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [
+    "None blocking. Feature is fully verified.",
+    "(Optional/cosmetic) Address pre-existing Recharts width(-1)/height(-1) warnings on Dashboard."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py:936-1019 PnL endpoint: cleanly separates accrual (period_year/period_month with amount_due) vs cash (paid_date with amount_paid). Late-fee assessment is gated by due_by=day 10 + waiver flag + payment date — correct per spec.",
+    "/app/backend/server.py:945-951 BUDGET_TO_EXPENSE mapping aligns budget category names with expense category names so variance lines net out properly (e.g., 'Snow Plowing' -> 'Snow Removal').",
+    "/app/backend/server.py:997 Budget query uses ed.year (period-end year). Note: a custom range that spans two years (e.g., 2024-11-01..2025-02-28) will only pull budget items for 2025; acceptable for now since the UI year/period selectors avoid cross-year ranges, but worth documenting.",
+    "/app/frontend/src/pages/PnL.jsx is well factored (~170 lines), uses useMemo for range and useEffect deps on (start,end,basis). All required data-testid hooks present including per-category pnl-exp-<category>. Print uses window.print() directly — meets spec.",
+    "/app/frontend/src/pages/Budget.jsx adds budget-print-btn via window.print(). print-area wrapper is on the totals card and items table — sidebar is .no-print/aside hidden via @media print as expected.",
+    "/app/frontend/src/components/layout/AppShell.jsx nav links list now includes /pnl with testid nav-pnl and LineChart icon. Mobile nav exposes m-nav-pnl automatically via template literal — no separate change needed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_pnl.py (new — 6 P&L endpoint tests)"
+  ],
+  "success_rate": {"backend": "100% (34/34, including 6 new P&L tests)", "frontend": "100% on all spec'd flows"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne (admin)",
+  "seed_data_creation": "None. Tests are read-only against existing imported 2023-2027 data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "P&L Statement feature is fully verified. New tests: /app/backend/tests/test_pnl.py. Useful selectors: nav-pnl, pnl-page, pnl-period (values: month/quarter/ytd/year/custom), pnl-year, pnl-start, pnl-end, pnl-basis-accrual, pnl-basis-cash, pnl-print-btn, pnl-total-income, pnl-total-expenses, pnl-net-income, pnl-exp-<CategoryName> (e.g., pnl-exp-Mowing), budget-print-btn. Backend reference numbers (2025 full-year, accrual): fees=13368.00, late=49.66, total_income=13417.66, total_exp=9607.40, total_budget=13665.00, net=3810.26. 2026 cash income=$6,539.00 vs accrual $13,368.00 (reflects prepayments). Custom range that spans two calendar years uses ed.year for budget lookup — keep within one year when possible.",
+  "rca_of_the_issue": "N/A — feature verification iteration, no bugs found."
+}

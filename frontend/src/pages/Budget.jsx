@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney } from "@/lib/utils";
-import { Plus, Trash2, Pencil, X, Sparkles } from "lucide-react";
+import { Plus, Trash2, Pencil, X, Sparkles, Printer } from "lucide-react";
 import { toast } from "sonner";
 
 const empty = { year: new Date().getFullYear(), category: "", budgeted_amount: "", notes: "" };
@@ -81,6 +81,13 @@ export default function Budget() {
             <Sparkles size={16} /> From prior year
           </button>
           <button
+            data-testid="budget-print-btn"
+            onClick={() => window.print()}
+            className="border border-[#E7E5E4] hover:bg-[#F5F5F4] text-[#1C1917] px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
+          >
+            <Printer size={16} /> Print
+          </button>
+          <button
             data-testid="add-budget-btn"
             onClick={() => { setEditing(null); setForm({ ...empty, year }); setOpen(true); }}
             className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
@@ -90,7 +97,7 @@ export default function Budget() {
         </div>
       </div>
 
-      <div className="bg-white border border-[#E7E5E4] rounded-lg p-6">
+      <div className="bg-white border border-[#E7E5E4] rounded-lg p-6 print-area">
         <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">Total Budget · {year}</div>
         <div className="font-display text-3xl font-bold mt-2 tabular-nums" data-testid="budget-total">{fmtMoney(total)}</div>
       </div>

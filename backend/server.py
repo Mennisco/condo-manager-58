@@ -933,6 +933,92 @@ async def dashboard_trends(user=Depends(get_current_user)):
     return {"years": out[-4:]}
 
 
+@api.get("/reports/pnl")
+async def pnl(start: str, end: str, basis: str = "accrual", user=Depends(get_current_user)):
+    """Profit & Loss for a date range. basis='accrual' recognizes dues in the
+    month they cover (neutralizes prepayments); basis='cash' uses paid_date."""
+    from datetime import date as _date
+    sd = datetime.fromisoformat(start).date()
+    ed = datetime.fromisoformat(end).date()
+    months = max(1, (ed.year - sd.year) * 12 + (ed.month - sd.month) + 1)
+
+    BUDGET_TO_EXPENSE = {
+        "Mowing": "Mowing", "Snow Plowing": "Snow Removal", "Utilities": "Utilities",
+        "HOA Insurance": "Insurance", "Tax accounting": "Bank/Accounting",
+        "Landscaping/Spraying": "Landscaping", "Trash Removal": "Trash Removal",
+        "Maintenance": "Maintenance", "Window washing": "Window Washing",
+        "Reserve": "Reserve", "Major Capital Exp": "Maintenance",
+    }
+
+    fees_income = 0.0
+    late_income = 0.0
+    async for f in db.fee_payments.find({}):
+        in_scope = False
+        if basis == "cash":
+            pd = f.get("paid_date")
+            if f.get("paid") and pd:
+                try:
+                    d = datetime.fromisoformat(pd.replace("Z", "+00:00")).date()
+                    if sd <= d <= ed:
+                        in_scope = True
+                        fees_income += float(f.get("amount_paid", 0) or 0)
+                except Exception:
+                    pass
+        else:  # accrual / earned
+            pdate = _date(f["period_year"], f["period_month"], 1)
+            if sd <= pdate <= ed:
+                in_scope = True
+                fees_income += float(f.get("amount_due", 0) or 0)
+        # late fees assessed within scope (applied + not waived)
+        if in_scope and not f.get("late_fee_waived"):
+            unit = await db.units.find_one({"_id": ObjectId(f["unit_id"])}, {"late_fee": 1}) if f.get("unit_id") else None
+            lf = float(unit.get("late_fee", 0) or 0) if unit else 0.0
+            if lf > 0:
+                due_by = _date(f["period_year"], f["period_month"], 10)
+                applied = False
+                pd = f.get("paid_date")
+                if f.get("paid") and pd:
+                    try:
+                        d = datetime.fromisoformat(pd.replace("Z", "+00:00")).date()
+                        applied = d > due_by
+                    except Exception:
+                        applied = False
+                elif not f.get("paid"):
+                    applied = datetime.now(timezone.utc).date() > due_by
+                if applied:
+                    late_income += lf
+
+    exp_by_cat = {}
+    async for e in db.expenses.find({"date": {"$gte": start, "$lte": end}}):
+        c = e.get("category") or "Other"
+        exp_by_cat[c] = exp_by_cat.get(c, 0.0) + float(e.get("amount", 0) or 0)
+
+    budget_by_cat = {}
+    async for b in db.budget_items.find({"year": ed.year}):
+        mapped = BUDGET_TO_EXPENSE.get(b["category"], b["category"])
+        budget_by_cat[mapped] = budget_by_cat.get(mapped, 0.0) + float(b.get("budgeted_amount", 0) or 0) * months / 12.0
+
+    cats = sorted(set(list(exp_by_cat.keys()) + list(budget_by_cat.keys())))
+    expense_lines = [{
+        "category": c,
+        "actual": round(exp_by_cat.get(c, 0.0), 2),
+        "budget": round(budget_by_cat.get(c, 0.0), 2),
+        "variance": round(budget_by_cat.get(c, 0.0) - exp_by_cat.get(c, 0.0), 2),
+    } for c in cats]
+
+    total_exp = round(sum(exp_by_cat.values()), 2)
+    total_budget = round(sum(budget_by_cat.values()), 2)
+    total_income = round(fees_income + late_income, 2)
+    return {
+        "start": start, "end": end, "basis": basis, "months": months,
+        "income": {"fees": round(fees_income, 2), "late_fees": round(late_income, 2), "total": total_income},
+        "expense_lines": expense_lines,
+        "total_expenses": total_exp,
+        "total_budget": total_budget,
+        "net_income": round(total_income - total_exp, 2),
+    }
+
+
 @api.get("/reports/annual")
 async def annual_report(year: int, user=Depends(get_current_user)):
     """Return a structured annual report for printing/exporting."""

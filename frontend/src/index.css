@@ -61,3 +61,21 @@
     @apply bg-background text-foreground;
   }
 }
+
+@media print {
+  aside,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+  .print-area {
+    border: none !important;
+    box-shadow: none !important;
+  }
+  body {
+    background: #fff !important;
+  }
+}
+
