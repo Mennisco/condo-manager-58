@@ -24,12 +24,35 @@ const empty = {
 export default function Expenses() {
   const [year, setYear] = useState(new Date().getFullYear());
   const [items, setItems] = useState([]);
+  const [allItems, setAllItems] = useState(null);
+  const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
 
-  const load = () => api.get(`/expenses?year=${year}`).then((r) => setItems(r.data));
+  const load = () => {
+    api.get(`/expenses?year=${year}`).then((r) => setItems(r.data));
+    setAllItems(null); // invalidate cross-year cache so search reflects latest
+  };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [year]);
+
+  const q = query.trim().toLowerCase();
+  // When searching, pull every year once so results span all history.
+  useEffect(() => {
+    if (q && allItems === null) {
+      api.get(`/expenses`).then((r) => setAllItems(r.data));
+    }
+    /* eslint-disable-next-line */
+  }, [q]);
+
+  const matches = (x) =>
+    !q ||
+    [x.category, x.vendor, x.description, x.notes]
+      .filter(Boolean)
+      .some((s) => String(s).toLowerCase().includes(q));
+
+  const source = q ? (allItems || []) : items;
+  const displayed = source.filter(matches);
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -69,8 +92,8 @@ export default function Expenses() {
     load();
   };
 
-  const total = items.reduce((a, x) => a + x.amount, 0);
-  const byCat = items.reduce((acc, x) => {
+  const total = displayed.reduce((a, x) => a + x.amount, 0);
+  const byCat = displayed.reduce((acc, x) => {
     acc[x.category] = (acc[x.category] || 0) + x.amount;
     return acc;
   }, {});
