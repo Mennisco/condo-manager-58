@@ -211,8 +211,16 @@ function RecordModal({ recording, units, onClose, onSaved }) {
   const [form, setForm] = useState(
     isExpense
       ? { date: txn.date, category: guess.category, vendor: guess.vendor, amount: txn.amount, description: txn.description }
-      : { unit_id: units[0]?.id || "", period_year: year || new Date().getFullYear(), period_month: month || 1, amount_paid: txn.amount, paid_date: txn.date }
+      : { unit_id: units[0]?.id || "", period_year: year || new Date().getFullYear(), months: [month || 1], paid_date: txn.date }
   );
+
+  const selCount = !isExpense ? (form.months?.length || 0) : 0;
+  const splitAmount = selCount ? Math.round((txn.amount / selCount) * 100) / 100 : 0;
+  const toggleMonth = (mn) =>
+    setForm((f) => ({
+      ...f,
+      months: f.months.includes(mn) ? f.months.filter((x) => x !== mn) : [...f.months, mn].sort((a, b) => a - b),
+    }));
 
   const inp = "w-full border border-[#E7E5E4] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#166534]/40 focus:border-[#166534]";
 
@@ -227,11 +235,14 @@ function RecordModal({ recording, units, onClose, onSaved }) {
         toast.success("Expense recorded");
       } else {
         if (!form.unit_id) { toast.error("Pick a unit"); setSaving(false); return; }
-        await api.post("/fees/record", {
-          unit_id: form.unit_id, period_year: Number(form.period_year), period_month: Number(form.period_month),
-          amount_paid: parseFloat(form.amount_paid) || 0, paid_date: form.paid_date, method: "bank",
-        });
-        toast.success("Fee payment recorded");
+        if (!form.months.length) { toast.error("Pick at least one month"); setSaving(false); return; }
+        for (const mn of form.months) {
+          await api.post("/fees/record", {
+            unit_id: form.unit_id, period_year: Number(form.period_year), period_month: mn,
+            amount_paid: splitAmount, paid_date: form.paid_date, method: "bank",
+          });
+        }
+        toast.success(`Recorded ${form.months.length} month${form.months.length > 1 ? "s" : ""} of fees`);
       }
       onSaved();
     } catch (e) {
@@ -272,16 +283,32 @@ function RecordModal({ recording, units, onClose, onSaved }) {
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Month">
-                <select value={form.period_month} onChange={(e) => setForm({ ...form, period_month: e.target.value })} className={inp}>
-                  {MONTHS.map((mn, idx) => <option key={mn} value={idx + 1}>{mn}</option>)}
-                </select>
-              </Field>
               <Field label="Year"><input type="number" value={form.period_year} onChange={(e) => setForm({ ...form, period_year: e.target.value })} className={inp} /></Field>
+              <Field label="Paid date"><input type="date" value={form.paid_date} onChange={(e) => setForm({ ...form, paid_date: e.target.value })} className={inp} /></Field>
             </div>
-            <Field label="Amount paid"><input type="number" step="0.01" value={form.amount_paid} onChange={(e) => setForm({ ...form, amount_paid: e.target.value })} className={inp} /></Field>
-            <Field label="Paid date"><input type="date" value={form.paid_date} onChange={(e) => setForm({ ...form, paid_date: e.target.value })} className={inp} /></Field>
-            <p className="text-xs text-[#78716C]">Tip: for a multi-month prepayment, record one month here, then mark the other months paid on the Monthly Fees page.</p>
+            <Field label="Months covered (tick all that this deposit pays)">
+              <div data-testid="record-fee-months" className="grid grid-cols-4 gap-2">
+                {MONTHS.map((mn, idx) => {
+                  const on = form.months.includes(idx + 1);
+                  return (
+                    <button
+                      key={mn}
+                      type="button"
+                      data-testid={`record-month-${idx + 1}`}
+                      onClick={() => toggleMonth(idx + 1)}
+                      className={`px-2 py-1.5 rounded-md text-xs font-semibold border transition-colors ${on ? "bg-[#166534] text-white border-[#166534]" : "bg-white text-[#78716C] border-[#E7E5E4] hover:border-[#166534]"}`}
+                    >
+                      {mn.slice(0, 3)}
+                    </button>
+                  );
+                })}
+              </div>
+            </Field>
+            <div className="flex items-center justify-between bg-[#F0FDF4] border border-[#BBF7D0] rounded-md px-3 py-2 text-sm">
+              <span className="text-[#166534] font-semibold">{selCount} month{selCount !== 1 ? "s" : ""} · {fmtMoney(txn.amount)} total</span>
+              <span data-testid="record-split-amount" className="tabular-nums font-bold text-[#166534]">{fmtMoney(splitAmount)} each</span>
+            </div>
+            <p className="text-xs text-[#78716C]">Auto-splits the deposit evenly across the months you tick.</p>
           </div>
         )}
 
