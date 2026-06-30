@@ -63,6 +63,16 @@ in a simple, easy-to-use app that I can hand off to the next president or treasu
 - **Dashboard Multi-Year Trend strip** (GET /api/dashboard/trends): per-year Collected, Expenses, On-time payment rate (paid by the 10th), YoY expense growth, with a de-emphasized late-payment count.
 - Verified: 28/28 backend tests + frontend flows (iteration_10).
 
+## Implemented (June 2026) — P&L Statement + polish
+- **P&L Statement** (`/pnl`, nav "P&L Statement", GET /api/reports/pnl): periods = This Month / This Quarter / YTD / Full Year / Custom. Basis toggle — Earned/Accrual (default; dues recognized in the month they cover via amount_due, neutralizing prepayments) vs Cash (amount_paid by paid_date). Income (fees + late fees assessed) → Total Income; Expenses by category Actual|Budget(prorated, category-mapped)|Variance → Total Expenses; Net Income (Surplus/Deficit). Print/PDF.
+- **Budget page**: Print button added; remains the annual planning tool (Nov meeting), not auto-updated monthly.
+- Print CSS (`@media print`) hides sidebar. Dashboard banner renamed "Treasurer Dashboard" → "Innsbruck One Manager".
+- **Vendors**: multi-category support (toggle chips/badges); directory seeded with 7 vendors + categories + lifecycle notes (KS Lawn and Snow replaced by JC Land Services, Mar 2026). Expense cell-comment notes imported; 11 vendors auto-filled from notes.
+- **Expenses**: cross-year search box (vendor/keyword/category/notes); date_paid field.
+- Verified iteration_11: 34/34 backend (6 new P&L tests) + frontend 100%.
+- Known minor: Recharts width(-1) console warnings on Dashboard (cosmetic); P&L custom range spanning two years uses end-year for budget lookup.
+
+
 ## Next Tasks (Future backlog — discuss with user next)
 1. Bank statement PDF reconciliation (P1).
 2. Gmail bank-alert parsing (P1).
