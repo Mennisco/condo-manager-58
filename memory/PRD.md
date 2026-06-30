@@ -74,10 +74,16 @@ in a simple, easy-to-use app that I can hand off to the next president or treasu
 
 
 ## Next Tasks (Future backlog — discuss with user next)
-1. Bank statement PDF reconciliation (P1).
-2. Gmail bank-alert parsing (P1).
+1. Gmail bank-alert parsing (P1) — connect InnsbruckOne@gmail.com to read bank deposit/withdrawal alert emails. (User: tackle next session.)
+2. PWA "install to home screen" support (icon + manifest). (User: tackle next session.)
 3. One-click year-end statement PDFs emailed to owners (P2).
 4. Per-owner drill-down (click unit → full payment history & balance owed); CSV export on Fees/Expenses.
+5. Bank reconcile niceties: one-click "Add as expense / Record fee" from a flagged row; de-dup confirm on re-upload of same period.
+
+## Implemented (June 2026) — Bank Reconciliation + polish
+- **Bank Reconciliation** (`/bank`, nav "Bank Reconcile"): upload a Heartland Bank & Trust statement PDF → deterministic pdfplumber parser (no LLM) extracts credits/withdrawals + balances → auto-matches deposits to PAID fee_payments and withdrawals to expenses by amount (±$0.50) → flags unmatched for review → verifies balance → stores each statement (bank_statements collection, base64 PDF kept). Endpoints: POST /api/bank/reconcile, GET /api/bank/statements, GET/DELETE /api/bank/statements/{id}. Verified iteration_12 (7 new tests). Sample May 2026: 5/6 deposits + 2/4 withdrawals matched, 3 flagged, balanced.
+- Login "Treasurer sign-in" → "Manager sign-in". Dashboard trend strip now shows a **Net** line per year (collected − expenses).
+- Vendor back-fill: 140 historical expenses tagged (Honeycomb Insurance, City of Princeton, Republic Services, KS Lawn and Snow pre-Mar-2026, JC Land Services after).
 
 ## Credentials
 See `/app/memory/test_credentials.md`. Default admin: `treasurer@condoassoc.org` / `treasurer123`.
