@@ -189,6 +189,7 @@ class BudgetItemIn(BaseModel):
 class Vendor(BaseDoc):
     name: str
     service: Optional[str] = None
+    category: Optional[str] = None
     contact_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
@@ -199,6 +200,7 @@ class Vendor(BaseDoc):
 class VendorIn(BaseModel):
     name: str
     service: Optional[str] = None
+    category: Optional[str] = None
     contact_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
