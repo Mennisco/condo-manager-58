@@ -5,6 +5,9 @@ ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / ".env")
 
 import os
+import io
+import re
+import base64
 import logging
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -13,7 +16,8 @@ from typing import List, Optional, Annotated, Any
 import bcrypt
 import jwt
 from bson import ObjectId
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, status
+import pdfplumber
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, BeforeValidator
@@ -1041,6 +1045,181 @@ async def annual_report(year: int, user=Depends(get_current_user)):
         "budget": budget,
         "generated_at": now_iso(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Bank statement reconciliation
+# ---------------------------------------------------------------------------
+_TXN_RE = re.compile(r"^(\d{1,2}/\d{1,2})\s+(.*?)\s+(-?\$[\d,]+\.\d{2})$")
+
+
+def _txn_iso(mmdd: str, end_year: int, end_month: int) -> str:
+    mm, dd = [int(x) for x in mmdd.split("/")]
+    yr = end_year
+    if mm > end_month:  # e.g., Dec txn on a Jan statement
+        yr -= 1
+    return f"{yr:04d}-{mm:02d}-{dd:02d}"
+
+
+def parse_bank_statement(pdf_bytes: bytes) -> dict:
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        text = "\n".join((pg.extract_text() or "") for pg in pdf.pages)
+
+    def _money(s):
+        return float(s.replace("$", "").replace(",", ""))
+
+    meta = {"bank": "Heartland Bank and Trust Company"}
+    m = re.search(r"Statement Dates\s+(\d{1,2}/\d{1,2}/\d{2})\s+thru\s+(\d{1,2}/\d{1,2}/\d{2})", text)
+    if m:
+        sp = m.group(1).split("/")
+        ep = m.group(2).split("/")
+        meta["period_start"] = f"20{sp[2]}-{int(sp[0]):02d}-{int(sp[1]):02d}"
+        meta["period_end"] = f"20{ep[2]}-{int(ep[0]):02d}-{int(ep[1]):02d}"
+        end_year, end_month = 2000 + int(ep[2]), int(ep[0])
+    else:
+        now = datetime.now(timezone.utc)
+        end_year, end_month = now.year, now.month
+        meta["period_start"] = meta["period_end"] = now.date().isoformat()
+    mb = re.search(r"Beginning Balance\s+\$([\d,]+\.\d{2})", text)
+    me = re.search(r"Ending Balance\s+\$([\d,]+\.\d{2})", text)
+    meta["beginning_balance"] = _money(mb.group(1)) if mb else 0.0
+    meta["ending_balance"] = _money(me.group(1)) if me else 0.0
+
+    credits, withdrawals = [], []
+    section = None
+    for raw in text.split("\n"):
+        s = raw.strip()
+        if not s:
+            continue
+        if s.startswith("Electronic and Other Credits"):
+            section = "c"; continue
+        if s.startswith("Electronic and Other Withdrawals"):
+            section = "w"; continue
+        if s.startswith("Check Register") or s.startswith("Daily Balance") or "SEEREVERSE" in s.replace(" ", ""):
+            section = None; continue
+        if section not in ("c", "w"):
+            continue
+        if s.startswith("Date Description"):
+            continue
+        mt = _TXN_RE.match(s)
+        if mt:
+            mmdd, desc, amt = mt.groups()
+            txn = {
+                "date": _txn_iso(mmdd, end_year, end_month),
+                "description": desc.strip(),
+                "amount": round(abs(_money(amt)), 2),
+                "kind": "credit" if section == "c" else "withdrawal",
+            }
+            (credits if section == "c" else withdrawals).append(txn)
+        else:
+            lst = credits if section == "c" else withdrawals
+            if lst:
+                lst[-1]["description"] = (lst[-1]["description"] + " " + s).strip()
+    return {"meta": meta, "credits": credits, "withdrawals": withdrawals}
+
+
+async def reconcile_statement(parsed: dict, tol: float = 0.50) -> dict:
+    meta = parsed["meta"]
+    start, end = meta["period_start"], meta["period_end"]
+    # widen window by ~31 days for matching
+    sd = datetime.fromisoformat(start).date() - timedelta(days=31)
+    ed = datetime.fromisoformat(end).date() + timedelta(days=10)
+    exp_list = await db.expenses.find({"date": {"$gte": sd.isoformat(), "$lte": ed.isoformat()}}).to_list(2000)
+    fee_list = await db.fee_payments.find({"paid": True, "paid_date": {"$ne": None}}).to_list(5000)
+    used_exp, used_fee = set(), set()
+
+    for w in parsed["withdrawals"]:
+        match = None
+        for e in exp_list:
+            if e["_id"] in used_exp:
+                continue
+            if abs(float(e.get("amount", 0)) - w["amount"]) <= tol:
+                match = e; break
+        if match:
+            used_exp.add(match["_id"])
+            label = match.get("category", "Expense")
+            if match.get("vendor"):
+                label += f" · {match['vendor']}"
+            w["match"] = {"type": "expense", "label": label, "id": str(match["_id"])}
+        else:
+            w["match"] = None
+
+    for c in parsed["credits"]:
+        match = None
+        for f in fee_list:
+            if f["_id"] in used_fee:
+                continue
+            if abs(float(f.get("amount_paid", 0) or 0) - c["amount"]) <= tol:
+                match = f; break
+        if match:
+            used_fee.add(match["_id"])
+            c["match"] = {"type": "fee", "label": f"Unit {match['unit_number']} · {match['owner_name']}", "id": str(match["_id"])}
+        else:
+            c["match"] = None
+
+    dep_total = round(sum(c["amount"] for c in parsed["credits"]), 2)
+    wd_total = round(sum(w["amount"] for w in parsed["withdrawals"]), 2)
+    computed_end = round(meta["beginning_balance"] + dep_total - wd_total, 2)
+    summary = {
+        "deposits_total": dep_total,
+        "withdrawals_total": wd_total,
+        "deposits_count": len(parsed["credits"]),
+        "withdrawals_count": len(parsed["withdrawals"]),
+        "matched_credits": sum(1 for c in parsed["credits"] if c["match"]),
+        "matched_withdrawals": sum(1 for w in parsed["withdrawals"] if w["match"]),
+        "unmatched": sum(1 for t in parsed["credits"] + parsed["withdrawals"] if not t["match"]),
+        "computed_ending": computed_end,
+        "balance_ok": abs(computed_end - meta["ending_balance"]) <= 0.01,
+    }
+    return {**parsed, "summary": summary}
+
+
+@api.post("/bank/reconcile")
+async def bank_reconcile(file: UploadFile = File(...), user=Depends(get_current_user)):
+    data = await file.read()
+    try:
+        parsed = parse_bank_statement(data)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read PDF: {e}")
+    if not parsed["credits"] and not parsed["withdrawals"]:
+        raise HTTPException(status_code=422, detail="No transactions found. Is this a Heartland Bank statement PDF?")
+    result = await reconcile_statement(parsed)
+    doc = {
+        "filename": file.filename,
+        "pdf_base64": base64.b64encode(data).decode("ascii"),
+        "meta": result["meta"],
+        "credits": result["credits"],
+        "withdrawals": result["withdrawals"],
+        "summary": result["summary"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    res = await db.bank_statements.insert_one(doc)
+    result["id"] = str(res.inserted_id)
+    result["filename"] = file.filename
+    result["created_at"] = doc["created_at"]
+    return result
+
+
+@api.get("/bank/statements")
+async def list_bank_statements(user=Depends(get_current_user)):
+    out = []
+    async for s in db.bank_statements.find({}, {"pdf_base64": 0, "credits": 0, "withdrawals": 0}).sort("meta.period_end", -1):
+        out.append(_ser(s))
+    return out
+
+
+@api.get("/bank/statements/{sid}")
+async def get_bank_statement(sid: str, user=Depends(get_current_user)):
+    s = await db.bank_statements.find_one({"_id": ObjectId(sid)}, {"pdf_base64": 0})
+    if not s:
+        raise HTTPException(status_code=404, detail="Not found")
+    return _ser(s)
+
+
+@api.delete("/bank/statements/{sid}")
+async def delete_bank_statement(sid: str, user=Depends(get_current_user)):
+    await db.bank_statements.delete_one({"_id": ObjectId(sid)})
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------
