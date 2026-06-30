@@ -110,8 +110,8 @@ export default function Dashboard() {
         />
         <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black/65 via-black/25 to-transparent" />
         <div className="absolute bottom-5 left-6 text-white drop-shadow-md">
-          <div className="text-xs uppercase tracking-[0.15em] font-bold opacity-90">Innsbruck One</div>
-          <div className="font-display text-2xl md:text-3xl font-bold mt-1">Treasurer Dashboard</div>
+          <div className="text-xs uppercase tracking-[0.15em] font-bold opacity-90">Dashboard</div>
+          <div className="font-display text-2xl md:text-3xl font-bold mt-1">Innsbruck One Manager</div>
         </div>
       </div>
       <div>
