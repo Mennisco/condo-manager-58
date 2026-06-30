@@ -1,17 +1,34 @@
 import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney } from "@/lib/utils";
-import { Upload, CheckCircle2, AlertTriangle, FileText, Trash2, Loader2, Landmark } from "lucide-react";
+import { Upload, CheckCircle2, AlertTriangle, FileText, Trash2, Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
+
+const CATEGORIES = ["Utilities", "Insurance", "Landscaping", "Mowing", "Snow Removal", "Trash Removal", "Maintenance", "Window Washing", "Bank/Accounting", "Reserve", "Other"];
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+function guessExpense(desc) {
+  const d = (desc || "").toLowerCase();
+  if (d.includes("honeycomb")) return { category: "Insurance", vendor: "Honeycomb Insurance" };
+  if (d.includes("republic")) return { category: "Trash Removal", vendor: "Republic Services" };
+  if (d.includes("princeto") || d.includes("utility")) return { category: "Utilities", vendor: "City of Princeton" };
+  if (d.includes("mensch")) return { category: "Other", vendor: "Bill Mensch" };
+  return { category: "Other", vendor: "" };
+}
 
 export default function BankReconcile() {
   const [history, setHistory] = useState([]);
   const [result, setResult] = useState(null);
+  const [units, setUnits] = useState([]);
   const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(null); // { txn, kind }
   const fileRef = useRef();
 
   const loadHistory = () => api.get("/bank/statements").then((r) => setHistory(r.data));
-  useEffect(() => { loadHistory(); }, []);
+  useEffect(() => {
+    loadHistory();
+    api.get("/units").then((r) => setUnits(r.data));
+  }, []);
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];
@@ -46,6 +63,14 @@ export default function BankReconcile() {
     loadHistory();
   };
 
+  const onRecorded = async () => {
+    setRecording(null);
+    if (!result?.id) return;
+    const { data } = await api.post(`/bank/statements/${result.id}/rematch`);
+    setResult(data);
+    loadHistory();
+  };
+
   return (
     <div data-testid="bank-page" className="space-y-6">
       <div>
@@ -53,14 +78,11 @@ export default function BankReconcile() {
         <h1 className="font-display text-4xl font-bold tracking-tight mt-2">Bank Reconciliation</h1>
         <p className="text-[#78716C] mt-2 max-w-2xl">
           Upload your Heartland Bank statement PDF. We extract every transaction, match deposits to fee
-          payments and withdrawals to expenses, and flag anything that needs a look.
+          payments and withdrawals to expenses, and flag anything that needs a look — record it in one click.
         </p>
       </div>
 
-      <label
-        data-testid="bank-upload-label"
-        className="block border-2 border-dashed border-[#D6D3D1] rounded-lg bg-white hover:border-[#166534] transition-colors cursor-pointer p-10 text-center"
-      >
+      <label data-testid="bank-upload-label" className="block border-2 border-dashed border-[#D6D3D1] rounded-lg bg-white hover:border-[#166534] transition-colors cursor-pointer p-10 text-center">
         <input ref={fileRef} data-testid="bank-upload-input" type="file" accept="application/pdf" className="hidden" onChange={onFile} />
         {uploading ? (
           <div className="flex flex-col items-center gap-2 text-[#166534]">
@@ -76,18 +98,13 @@ export default function BankReconcile() {
         )}
       </label>
 
-      {result ? <ReconcileResult result={result} /> : null}
+      {result ? <ReconcileResult result={result} onRecord={(txn, kind) => setRecording({ txn, kind })} /> : null}
 
       {history.length > 0 ? (
         <div className="bg-white border border-[#E7E5E4] rounded-lg overflow-hidden">
           <div className="px-6 py-3 text-[11px] uppercase tracking-[0.15em] font-bold text-[#78716C] border-b border-[#E7E5E4]">Reconciled statements</div>
           {history.map((s) => (
-            <div
-              key={s.id}
-              data-testid={`bank-history-${s.id}`}
-              onClick={() => openStatement(s.id)}
-              className="flex items-center justify-between px-6 py-3 border-b border-[#F5F5F4] hover:bg-[#F5F5F4] cursor-pointer"
-            >
+            <div key={s.id} data-testid={`bank-history-${s.id}`} onClick={() => openStatement(s.id)} className="flex items-center justify-between px-6 py-3 border-b border-[#F5F5F4] hover:bg-[#F5F5F4] cursor-pointer">
               <div className="flex items-center gap-3">
                 <FileText size={18} className="text-[#78716C]" />
                 <div>
@@ -106,11 +123,15 @@ export default function BankReconcile() {
           ))}
         </div>
       ) : null}
+
+      {recording ? (
+        <RecordModal recording={recording} units={units} onClose={() => setRecording(null)} onSaved={onRecorded} />
+      ) : null}
     </div>
   );
 }
 
-function ReconcileResult({ result }) {
+function ReconcileResult({ result, onRecord }) {
   const s = result.summary;
   const m = result.meta;
   return (
@@ -134,13 +155,13 @@ function ReconcileResult({ result }) {
         <Card label="Flagged for review" value={String(s.unmatched)} sub="unmatched transactions" accent={s.unmatched ? "text-[#B45309]" : "text-[#166534]"} />
       </div>
 
-      <TxnTable title="Deposits / Credits" rows={result.credits} />
-      <TxnTable title="Withdrawals / Debits" rows={result.withdrawals} negative />
+      <TxnTable title="Deposits / Credits" rows={result.credits} kind="credit" onRecord={onRecord} />
+      <TxnTable title="Withdrawals / Debits" rows={result.withdrawals} kind="withdrawal" negative onRecord={onRecord} />
     </div>
   );
 }
 
-function TxnTable({ title, rows, negative }) {
+function TxnTable({ title, rows, kind, negative, onRecord }) {
   if (!rows?.length) return null;
   return (
     <div className="bg-white border border-[#E7E5E4] rounded-lg overflow-hidden">
@@ -148,19 +169,28 @@ function TxnTable({ title, rows, negative }) {
       <table className="w-full text-sm">
         <tbody>
           {rows.map((t, i) => (
-            <tr key={i} data-testid={`bank-txn-${title.includes("Deposit") ? "credit" : "debit"}-${i}`} className="border-b border-[#F5F5F4] last:border-0">
+            <tr key={i} data-testid={`bank-txn-${kind === "credit" ? "credit" : "debit"}-${i}`} className="border-b border-[#F5F5F4] last:border-0">
               <td className="px-6 py-3 whitespace-nowrap text-[#78716C]">{t.date}</td>
               <td className="px-6 py-3">{t.description}</td>
               <td className={`px-6 py-3 text-right tabular-nums font-semibold ${negative ? "text-[#C53030]" : "text-[#166534]"}`}>{negative ? "-" : ""}{fmtMoney(t.amount)}</td>
-              <td className="px-6 py-3 text-right w-64">
+              <td className="px-6 py-3 text-right w-72">
                 {t.match ? (
                   <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#166534]">
                     <CheckCircle2 size={14} /> {t.match.label}
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-full px-2.5 py-1">
-                    <AlertTriangle size={13} /> Review
-                  </span>
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-full px-2.5 py-1">
+                      <AlertTriangle size={13} /> Review
+                    </span>
+                    <button
+                      data-testid={`bank-record-${kind}-${i}`}
+                      onClick={() => onRecord(t, kind)}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#166534] hover:bg-[#14532D] rounded-md px-2.5 py-1"
+                    >
+                      <Plus size={13} /> Record
+                    </button>
+                  </div>
                 )}
               </td>
             </tr>
@@ -168,6 +198,110 @@ function TxnTable({ title, rows, negative }) {
         </tbody>
       </table>
     </div>
+  );
+}
+
+function RecordModal({ recording, units, onClose, onSaved }) {
+  const { txn, kind } = recording;
+  const [saving, setSaving] = useState(false);
+  const isExpense = kind === "withdrawal";
+  const guess = isExpense ? guessExpense(txn.description) : null;
+  const [year, month] = (txn.date || "").split("-").map(Number);
+
+  const [form, setForm] = useState(
+    isExpense
+      ? { date: txn.date, category: guess.category, vendor: guess.vendor, amount: txn.amount, description: txn.description }
+      : { unit_id: units[0]?.id || "", period_year: year || new Date().getFullYear(), period_month: month || 1, amount_paid: txn.amount, paid_date: txn.date }
+  );
+
+  const inp = "w-full border border-[#E7E5E4] rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#166534]/40 focus:border-[#166534]";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      if (isExpense) {
+        await api.post("/expenses", {
+          date: form.date, category: form.category, vendor: form.vendor || null,
+          description: form.description, amount: parseFloat(form.amount) || 0, notes: "From bank reconciliation",
+        });
+        toast.success("Expense recorded");
+      } else {
+        if (!form.unit_id) { toast.error("Pick a unit"); setSaving(false); return; }
+        await api.post("/fees/record", {
+          unit_id: form.unit_id, period_year: Number(form.period_year), period_month: Number(form.period_month),
+          amount_paid: parseFloat(form.amount_paid) || 0, paid_date: form.paid_date, method: "bank",
+        });
+        toast.success("Fee payment recorded");
+      }
+      onSaved();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not record");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div data-testid="bank-record-modal" className="bg-white rounded-lg w-full max-w-lg p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="font-display text-xl font-bold">{isExpense ? "Record expense" : "Record fee payment"}</h3>
+          <button onClick={onClose} className="text-[#78716C] hover:text-[#1C1917]"><X size={20} /></button>
+        </div>
+        <div className="text-xs text-[#78716C] bg-[#F5F5F4] rounded-md px-3 py-2 mb-4">
+          From bank: <span className="font-semibold">{txn.date}</span> · {txn.description} · {fmtMoney(txn.amount)}
+        </div>
+
+        {isExpense ? (
+          <div className="space-y-3">
+            <Field label="Date"><input type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} className={inp} /></Field>
+            <Field label="Category">
+              <select data-testid="record-expense-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className={inp}>
+                {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+            <Field label="Vendor"><input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} className={inp} /></Field>
+            <Field label="Description"><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inp} /></Field>
+            <Field label="Amount"><input type="number" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className={inp} /></Field>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Field label="Unit / Owner">
+              <select data-testid="record-fee-unit" value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} className={inp}>
+                <option value="">Select a unit…</option>
+                {units.map((u) => <option key={u.id} value={u.id}>Unit {u.unit_number} · {u.owner_name}</option>)}
+              </select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Month">
+                <select value={form.period_month} onChange={(e) => setForm({ ...form, period_month: e.target.value })} className={inp}>
+                  {MONTHS.map((mn, idx) => <option key={mn} value={idx + 1}>{mn}</option>)}
+                </select>
+              </Field>
+              <Field label="Year"><input type="number" value={form.period_year} onChange={(e) => setForm({ ...form, period_year: e.target.value })} className={inp} /></Field>
+            </div>
+            <Field label="Amount paid"><input type="number" step="0.01" value={form.amount_paid} onChange={(e) => setForm({ ...form, amount_paid: e.target.value })} className={inp} /></Field>
+            <Field label="Paid date"><input type="date" value={form.paid_date} onChange={(e) => setForm({ ...form, paid_date: e.target.value })} className={inp} /></Field>
+            <p className="text-xs text-[#78716C]">Tip: for a multi-month prepayment, record one month here, then mark the other months paid on the Monthly Fees page.</p>
+          </div>
+        )}
+
+        <div className="flex justify-end gap-2 mt-6">
+          <button onClick={onClose} className="px-4 py-2 rounded-md border border-[#E7E5E4] font-semibold text-sm">Cancel</button>
+          <button data-testid="record-save-btn" onClick={save} disabled={saving} className="px-4 py-2 rounded-md bg-[#166534] hover:bg-[#14532D] text-white font-semibold text-sm flex items-center gap-2 disabled:opacity-60">
+            {saving ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle2 size={15} />} Record
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <label className="block">
+      <span className="block text-xs uppercase tracking-[0.12em] font-bold text-[#78716C] mb-1.5">{label}</span>
+      {children}
+    </label>
   );
 }
 

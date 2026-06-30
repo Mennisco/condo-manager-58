@@ -575,6 +575,43 @@ async def delete_fee(fee_id: str, user=Depends(get_current_user)):
     return {"ok": True}
 
 
+class FeeRecordIn(BaseModel):
+    unit_id: str
+    period_year: int
+    period_month: int
+    amount_paid: float
+    paid_date: Optional[str] = None
+    method: Optional[str] = "bank"
+
+
+@api.post("/fees/record")
+async def record_fee(data: FeeRecordIn, user=Depends(get_current_user)):
+    """Find-or-create a fee row for (unit, year, month) and mark it paid."""
+    unit = await db.units.find_one({"_id": ObjectId(data.unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    paid_date = data.paid_date or now_iso()
+    existing = await db.fee_payments.find_one({
+        "unit_id": data.unit_id, "period_year": data.period_year, "period_month": data.period_month,
+    })
+    if existing:
+        await db.fee_payments.update_one({"_id": existing["_id"]}, {"$set": {
+            "paid": True, "amount_paid": data.amount_paid, "paid_date": paid_date, "method": data.method,
+        }})
+        fid = existing["_id"]
+    else:
+        doc = {
+            "unit_id": data.unit_id, "unit_number": unit["unit_number"], "owner_name": unit["owner_name"],
+            "period_year": data.period_year, "period_month": data.period_month,
+            "amount_due": float(unit.get("monthly_fee", 0) or 0), "amount_paid": data.amount_paid,
+            "paid": True, "paid_date": paid_date, "method": data.method,
+            "late_fee_waived": False, "notes": None, "created_at": now_iso(),
+        }
+        res = await db.fee_payments.insert_one(doc)
+        fid = res.inserted_id
+    return _ser(await db.fee_payments.find_one({"_id": fid}))
+
+
 # ---------------------------------------------------------------------------
 # Expenses
 # ---------------------------------------------------------------------------
@@ -1220,6 +1257,27 @@ async def get_bank_statement(sid: str, user=Depends(get_current_user)):
 async def delete_bank_statement(sid: str, user=Depends(get_current_user)):
     await db.bank_statements.delete_one({"_id": ObjectId(sid)})
     return {"ok": True}
+
+
+@api.post("/bank/statements/{sid}/rematch")
+async def rematch_bank_statement(sid: str, user=Depends(get_current_user)):
+    """Recompute matches for a saved statement against current fees/expenses."""
+    s = await db.bank_statements.find_one({"_id": ObjectId(sid)})
+    if not s:
+        raise HTTPException(status_code=404, detail="Not found")
+    parsed = {
+        "meta": s["meta"],
+        "credits": [{k: v for k, v in c.items() if k != "match"} for c in s.get("credits", [])],
+        "withdrawals": [{k: v for k, v in w.items() if k != "match"} for w in s.get("withdrawals", [])],
+    }
+    result = await reconcile_statement(parsed)
+    await db.bank_statements.update_one({"_id": ObjectId(sid)}, {"$set": {
+        "credits": result["credits"], "withdrawals": result["withdrawals"], "summary": result["summary"],
+    }})
+    result["id"] = sid
+    result["filename"] = s.get("filename")
+    result["created_at"] = s.get("created_at")
+    return result
 
 
 # ---------------------------------------------------------------------------
