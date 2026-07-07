@@ -1437,7 +1437,6 @@ async def gmail_login(token: str):
         access_type="offline",
         prompt="consent select_account",
         include_granted_scopes="true",
-        login_hint=payload.get("email", ""),
     )
     await db.oauth_states.insert_one({"state": state, "created_at": now_iso()})
     return RedirectResponse(url)
