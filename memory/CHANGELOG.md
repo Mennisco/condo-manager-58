@@ -1,5 +1,10 @@
 # Changelog
 
+## July 2026 — Record-state + login photo fix
+- Bug: recording a split deposit (e.g. $288 → 3× $96 for Chuck Lough) saved the fees correctly but the alert row stayed "Review" because _match_txn only matches a single equal-amount fee_payment. Users thought it failed and re-recorded.
+- Fix: gmail_alerts now carry a persistent `recorded` flag. New endpoint POST /api/gmail/alerts/{aid}/resolve?recorded=bool. Record modal passes alertId; onRecorded resolves the alert. Table shows green "Recorded" badge + Undo link (priority: recorded > match > review). unmatched count excludes recorded.
+- Fix: removed full-image green overlay bg-[#166534]/40 on Login.jsx photo (user disliked "green tint"); replaced with bottom-only dark gradient for text legibility. Dashboard photo already neutral.
+
 ## July 2026 — Deposit owner suggestions (P1)
 - Bare check deposits (email says only "Deposit", no payer) stay flagged as Review by design — payer identity lives in the check image, not the email. Confirmed with user: deposits are always single-owner, never combined.
 - Backend _suggest_unit_by_name(): for credit deposits whose description contains an owner's first+last name (ACH/P2P like "P2P NFCU ACH WEB JAY S BARLOW"), attaches row["suggested"] {unit_id, unit_number, owner_name} to GET /api/gmail/alerts.

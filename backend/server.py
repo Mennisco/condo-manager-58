@@ -1538,10 +1538,17 @@ async def gmail_alerts(user=Depends(get_current_user)):
     out = []
     async for a in db.gmail_alerts.find().sort("txn_date", -1):
         row = _ser(a)
+        row["recorded"] = bool(a.get("recorded"))
         row["match"] = await _match_txn(a["kind"], a["amount"], a["txn_date"])
         row["suggested"] = _suggest_unit_by_name(a.get("description"), units) if a["kind"] == "credit" else None
         out.append(row)
     return out
+
+
+@api.post("/gmail/alerts/{aid}/resolve")
+async def resolve_gmail_alert(aid: str, recorded: bool = True, user=Depends(get_current_user)):
+    await db.gmail_alerts.update_one({"_id": ObjectId(aid)}, {"$set": {"recorded": recorded}})
+    return {"ok": True}
 
 
 @api.delete("/gmail/alerts/{aid}")

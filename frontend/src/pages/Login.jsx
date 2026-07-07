@@ -28,7 +28,7 @@ export default function Login() {
           alt="Innsbruck One"
           className="absolute inset-0 w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-[#166534]/40" />
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-12 text-white">
           <div className="font-display text-4xl font-bold leading-tight max-w-md">
             Innsbruck One Manager

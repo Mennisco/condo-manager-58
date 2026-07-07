@@ -52,9 +52,19 @@ export default function GmailAlerts() {
     setSyncing(false);
   };
 
-  const onRecorded = () => { setRecording(null); loadAlerts(); };
+  const onRecorded = async () => {
+    const id = recording?.alertId;
+    if (id) { try { await api.post(`/gmail/alerts/${id}/resolve`); } catch (e) { /* noop */ } }
+    setRecording(null);
+    loadAlerts();
+  };
 
-  const unmatched = alerts.filter((a) => !a.match).length;
+  const undo = async (id) => {
+    try { await api.post(`/gmail/alerts/${id}/resolve?recorded=false`); } catch (e) { /* noop */ }
+    loadAlerts();
+  };
+
+  const unmatched = alerts.filter((a) => !a.match && !a.recorded).length;
 
   return (
     <div data-testid="gmail-page" className="space-y-6">
@@ -120,13 +130,18 @@ export default function GmailAlerts() {
                       <td className="px-6 py-3">{a.description} <span className={`ml-2 text-[10px] uppercase font-bold ${a.kind === "credit" ? "text-[#166534]" : "text-[#C53030]"}`}>{a.kind === "credit" ? "Deposit" : "Debit"}</span></td>
                       <td className={`px-6 py-3 text-right tabular-nums font-semibold ${a.kind === "credit" ? "text-[#166534]" : "text-[#C53030]"}`}>{a.kind === "credit" ? "" : "-"}{fmtMoney(a.amount)}</td>
                       <td className="px-6 py-3 text-right w-72">
-                        {a.match ? (
+                        {a.recorded ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <span data-testid={`gmail-recorded-${i}`} className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#166534]"><CheckCircle2 size={14} /> Recorded</span>
+                            <button data-testid={`gmail-undo-${i}`} onClick={() => undo(a.id)} className="text-[11px] text-[#78716C] hover:text-[#1C1917] underline">Undo</button>
+                          </div>
+                        ) : a.match ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#166534]"><CheckCircle2 size={14} /> {a.match.label}</span>
                         ) : (
                           <div className="flex flex-col items-end gap-1">
                             <div className="flex items-center justify-end gap-2">
                               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-full px-2.5 py-1"><AlertTriangle size={13} /> Review</span>
-                              <button data-testid={`gmail-record-${i}`} onClick={() => setRecording({ txn: { date: a.txn_date, description: a.description, amount: a.amount }, kind: a.kind, suggested: a.suggested })} className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#166534] hover:bg-[#14532D] rounded-md px-2.5 py-1">
+                              <button data-testid={`gmail-record-${i}`} onClick={() => setRecording({ txn: { date: a.txn_date, description: a.description, amount: a.amount }, kind: a.kind, suggested: a.suggested, alertId: a.id })} className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#166534] hover:bg-[#14532D] rounded-md px-2.5 py-1">
                                 <Plus size={13} /> Record
                               </button>
                             </div>
