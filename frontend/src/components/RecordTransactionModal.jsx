@@ -17,7 +17,7 @@ function guessExpense(desc) {
 }
 
 export function RecordTransactionModal({ recording, units, onClose, onSaved }) {
-  const { txn, kind } = recording;
+  const { txn, kind, suggested } = recording;
   const [saving, setSaving] = useState(false);
   const isExpense = kind === "withdrawal";
   const guess = isExpense ? guessExpense(txn.description) : null;
@@ -27,8 +27,21 @@ export function RecordTransactionModal({ recording, units, onClose, onSaved }) {
   const [form, setForm] = useState(
     isExpense
       ? { date: dateStr, category: guess.category, vendor: guess.vendor, amount: txn.amount, description: txn.description }
-      : { unit_id: units[0]?.id || "", period_year: year || new Date().getFullYear(), months: [month || 1], paid_date: dateStr }
+      : { unit_id: suggested?.unit_id || units[0]?.id || "", period_year: year || new Date().getFullYear(), months: [month || 1], paid_date: dateStr }
   );
+
+  const feeMatches = !isExpense
+    ? units
+        .map((u) => ({ u, n: u.monthly_fee > 0 ? txn.amount / u.monthly_fee : 0 }))
+        .filter((x) => Math.round(x.n) === x.n && x.n >= 1 && x.n <= 12)
+    : [];
+
+  const applySuggestion = (unitId, n) => {
+    const base = month || 1;
+    const ms = [];
+    for (let k = 0; k < n; k++) { const m = base + k; if (m <= 12) ms.push(m); }
+    setForm((f) => ({ ...f, unit_id: unitId, months: ms.length ? ms : [base] }));
+  };
 
   const selCount = !isExpense ? (form.months?.length || 0) : 0;
   const splitAmount = selCount ? Math.round((txn.amount / selCount) * 100) / 100 : 0;
@@ -92,6 +105,25 @@ export function RecordTransactionModal({ recording, units, onClose, onSaved }) {
           </div>
         ) : (
           <div className="space-y-3">
+            {(suggested || feeMatches.length > 0) ? (
+              <div data-testid="record-suggestions" className="bg-[#F0FDF4] border border-[#BBF7D0] rounded-md px-3 py-2.5">
+                <div className="text-[11px] uppercase tracking-[0.12em] font-bold text-[#166534] mb-1.5">Suggestions</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {suggested ? (
+                    <button type="button" data-testid="suggestion-name" onClick={() => applySuggestion(suggested.unit_id, 1)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-semibold border transition-colors ${form.unit_id === suggested.unit_id ? "bg-[#166534] text-white border-[#166534]" : "bg-white text-[#166534] border-[#BBF7D0] hover:border-[#166534]"}`}>
+                      By name → Unit {suggested.unit_number} · {suggested.owner_name}
+                    </button>
+                  ) : null}
+                  {feeMatches.map(({ u, n }) => (
+                    <button key={u.id} type="button" data-testid={`suggestion-fee-${u.unit_number}`} onClick={() => applySuggestion(u.id, n)}
+                      className="px-2.5 py-1 rounded-full text-xs font-semibold border bg-white text-[#78716C] border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] transition-colors">
+                      Unit {u.unit_number} · {u.owner_name} · {fmtMoney(u.monthly_fee)}{n > 1 ? ` ×${n}mo` : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <Field label="Unit / Owner">
               <select data-testid="record-fee-unit" value={form.unit_id} onChange={(e) => setForm({ ...form, unit_id: e.target.value })} className={inp}>
                 <option value="">Select a unit…</option>

@@ -123,11 +123,16 @@ export default function GmailAlerts() {
                         {a.match ? (
                           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#166534]"><CheckCircle2 size={14} /> {a.match.label}</span>
                         ) : (
-                          <div className="flex items-center justify-end gap-2">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-full px-2.5 py-1"><AlertTriangle size={13} /> Review</span>
-                            <button data-testid={`gmail-record-${i}`} onClick={() => setRecording({ txn: { date: a.txn_date, description: a.description, amount: a.amount }, kind: a.kind })} className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#166534] hover:bg-[#14532D] rounded-md px-2.5 py-1">
-                              <Plus size={13} /> Record
-                            </button>
+                          <div className="flex flex-col items-end gap-1">
+                            <div className="flex items-center justify-end gap-2">
+                              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded-full px-2.5 py-1"><AlertTriangle size={13} /> Review</span>
+                              <button data-testid={`gmail-record-${i}`} onClick={() => setRecording({ txn: { date: a.txn_date, description: a.description, amount: a.amount }, kind: a.kind, suggested: a.suggested })} className="inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#166534] hover:bg-[#14532D] rounded-md px-2.5 py-1">
+                                <Plus size={13} /> Record
+                              </button>
+                            </div>
+                            {a.suggested ? (
+                              <span data-testid={`gmail-suggested-${i}`} className="text-[11px] font-semibold text-[#166534]">Likely: Unit {a.suggested.unit_number} · {a.suggested.owner_name}</span>
+                            ) : null}
                           </div>
                         )}
                       </td>

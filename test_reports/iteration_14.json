@@ -1,0 +1,28 @@
+{
+  "summary": "Frontend-only testing of /gmail Bank Email Alerts page and Record fee payment modal (owner suggestion feature). All 7 requested test scenarios passed. Did not test the final record-save-btn submit to avoid mutating production-like data; wiring reviewed in code.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "RecordTransactionModal Unit/Owner <select>", "issues": ["React hydration console warning: 'In HTML, <span> cannot be a child of <option>'. Caused by the preview-tooling injecting a <span data-ve-dynamic> inside <option> children (line 130 of RecordTransactionModal.jsx). Not a functional bug but pollutes the console with hydration errors on every modal open. Consider rendering the option label as a single flat string expression to avoid the dev-tool span wrapping, e.g. `{`Unit ${u.unit_number} · ${u.owner_name}`}` may already do this — the wrapper is added by ve tooling; could be suppressed by using a plain template literal without concatenation."]}
+    ]
+  },
+  "test_report_links": ["/app/test_reports/iteration_14.json"],
+  "action_items": [
+    "(Optional) Investigate hydration warning on <option> children in RecordTransactionModal to keep console clean."
+  ],
+  "critical_code_review_comments": [
+    "GmailAlerts.jsx (154 lines) and RecordTransactionModal.jsx (177 lines) are well-scoped and use data-testid everywhere required.",
+    "RecordTransactionModal: feeMatches uses floating-point division; Math.round(n)===n comparison is fragile for amounts that don't divide cleanly. Consider a tolerance (e.g. abs(txn.amount - u.monthly_fee * n) < 0.01) to be safer with float arithmetic — but observed results were correct for the tested $120 amounts.",
+    "applySuggestion: when starting month + n exceeds 12, months array is silently truncated (only months <=12 kept). Multi-month spans crossing year boundaries would be incorrect. Not exercised in this test but worth noting."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a", "frontend": "100%"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne (as documented)",
+  "seed_data_creation": "None. No data mutations performed.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Verified: (a) Connected banner shows 'Connected as innsbruckone@gmail.com'; (b) 47 alerts, 11 to review; (c) Exactly 2 rows show gmail-suggested-<i> hints — 'Likely: Unit 601 · Allie Roe' (P2P PAYMNT Heartland Bank a WEB Allie Roe) and 'Likely: Unit 603 · Jay Barlow' (P2P NFCU ACH WEB JAY S BARLOW); (d) Bare 'Deposit' rows (e.g. index 0,1) and Mobile Remote Deposit rows show NO 'Likely' hint but still expose gmail-record-<i>; (e) Clicking gmail-record on a named deposit (Allie Roe) opened record-modal with unit_id pre-selected to Allie Roe's unit (id 6a41440123004420f1e769e6); (f) record-suggestions block rendered with suggestion-name chip 'By name → Unit 601 · Allie Roe' plus 4 suggestion-fee-<unit_number> chips (601, 603, 617, 619, all $120); (g) Clicking suggestion-fee-601 kept unit_id set and ticked record-month-7 (July, matching the txn date 2026-07-02). Did NOT click record-save-btn to avoid creating a real fee payment; code path is straightforward POST /api/fees/record per month with toast on success.",
+  "rca of the issue": "N/A — no defects blocking the tested scenarios."
+}

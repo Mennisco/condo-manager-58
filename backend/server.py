@@ -1407,6 +1407,20 @@ def parse_alert_email(body: str) -> dict:
     return {"available_balance": balance, "transactions": txns}
 
 
+def _suggest_unit_by_name(description, units):
+    """Suggest the owner for a deposit whose description contains their name (P2P/ACH)."""
+    d = (description or "").lower()
+    for u in units:
+        toks = [t for t in re.split(r"[^a-z]+", (u.get("owner_name") or "").lower()) if len(t) >= 3 and t != "and"]
+        if len(toks) < 2:
+            continue
+        first, last = toks[0], toks[-1]
+        if re.search(r"\b" + re.escape(first) + r"\b", d) and re.search(r"\b" + re.escape(last) + r"\b", d):
+            return {"unit_id": str(u["_id"]), "unit_number": u["unit_number"], "owner_name": u["owner_name"]}
+    return None
+
+
+
 async def _match_txn(kind: str, amount: float, txn_date: str, tol: float = 0.50):
     if kind == "credit":
         f = await db.fee_payments.find_one({
@@ -1520,10 +1534,12 @@ async def gmail_sync(user=Depends(get_current_user)):
 
 @api.get("/gmail/alerts")
 async def gmail_alerts(user=Depends(get_current_user)):
+    units = [u async for u in db.units.find()]
     out = []
     async for a in db.gmail_alerts.find().sort("txn_date", -1):
         row = _ser(a)
         row["match"] = await _match_txn(a["kind"], a["amount"], a["txn_date"])
+        row["suggested"] = _suggest_unit_by_name(a.get("description"), units) if a["kind"] == "credit" else None
         out.append(row)
     return out
 
