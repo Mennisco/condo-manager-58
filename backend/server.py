@@ -1299,7 +1299,8 @@ GMAIL_SCOPES = [
 ]
 _MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
                "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
-_ALERT_TXN_RE = re.compile(r"^([A-Z]{3})\s+(\d{1,2})\s+(\d{4})\s+(.*?)\s+\$([\d,]+\.\d{2})$")
+_ALERT_TXN_RE = re.compile(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{4})\s+(.+?)\s+\$([\d,]+\.\d{2})", re.IGNORECASE)
+_SECTION_RE = re.compile(r"(Deposits|Credits|Withdrawals|Debits)\b", re.IGNORECASE)
 
 
 def _gmail_client_config():
@@ -1375,30 +1376,34 @@ def parse_alert_email(body: str) -> dict:
     mb = re.search(r"Available Balance:\s*\$([\d,]+\.\d{2})", body)
     if mb:
         balance = float(mb.group(1).replace(",", ""))
+    sections = []
+    for sm in _SECTION_RE.finditer(body):
+        w = sm.group(1).lower()
+        sections.append((sm.start(), "credit" if w in ("deposits", "credits") else "withdrawal"))
+
+    def kind_at(pos):
+        k = None
+        for start, kd in sections:
+            if start <= pos:
+                k = kd
+            else:
+                break
+        return k
+
     txns = []
-    section = None
-    for raw in body.replace("\r", "\n").split("\n"):
-        s = raw.strip()
-        if not s:
+    for mt in _ALERT_TXN_RE.finditer(body):
+        mon, day, yr, desc, amt = mt.groups()
+        mm = _MONTH_ABBR.get(mon.upper())
+        if not mm:
             continue
-        low = s.lower()
-        if low.startswith("deposits over") or low.startswith("deposits "):
-            section = "credit"; continue
-        if low.startswith("withdrawals over") or low.startswith("withdrawals ") or low.startswith("debits"):
-            section = "withdrawal"; continue
-        mt = _ALERT_TXN_RE.match(s)
-        if mt:
-            mon, day, yr, desc, amt = mt.groups()
-            mm = _MONTH_ABBR.get(mon.upper())
-            if not mm:
-                continue
-            kind = section or ("credit" if "deposit" in desc.lower() else "withdrawal")
-            txns.append({
-                "txn_date": f"{int(yr):04d}-{mm:02d}-{int(day):02d}",
-                "description": desc.strip(),
-                "amount": round(float(amt.replace(",", "")), 2),
-                "kind": kind,
-            })
+        desc = desc.strip()
+        kind = kind_at(mt.start()) or ("credit" if "deposit" in desc.lower() else "withdrawal")
+        txns.append({
+            "txn_date": f"{int(yr):04d}-{mm:02d}-{int(day):02d}",
+            "description": desc,
+            "amount": round(float(amt.replace(",", "")), 2),
+            "kind": kind,
+        })
     return {"available_balance": balance, "transactions": txns}
 
 
@@ -1489,7 +1494,7 @@ async def gmail_sync(user=Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Gmail not connected")
     service = gbuild("gmail", "v1", credentials=creds)
     listing = service.users().messages().list(
-        userId="me", q="from:no-reply@hbtbank.com newer_than:1y", maxResults=50,
+        userId="me", q='from:no-reply@hbtbank.com subject:"Transaction Alert" newer_than:2y', maxResults=100,
     ).execute()
     ids = [m["id"] for m in listing.get("messages", [])]
     new = 0
