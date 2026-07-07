@@ -1429,10 +1429,16 @@ async def gmail_status(user=Depends(get_current_user)):
 
 @api.get("/oauth/gmail/login")
 async def gmail_login(token: str):
-    if not _decode_app_token(token):
+    payload = _decode_app_token(token)
+    if not payload:
         raise HTTPException(status_code=401, detail="Invalid token")
     flow = Flow.from_client_config(_gmail_client_config(), scopes=GMAIL_SCOPES, redirect_uri=GMAIL_REDIRECT_URI)
-    url, state = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
+    url, state = flow.authorization_url(
+        access_type="offline",
+        prompt="consent select_account",
+        include_granted_scopes="true",
+        login_hint=payload.get("email", ""),
+    )
     await db.oauth_states.insert_one({"state": state, "created_at": now_iso()})
     return RedirectResponse(url)
 
