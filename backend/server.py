@@ -17,6 +17,11 @@ import bcrypt
 import jwt
 from bson import ObjectId
 import pdfplumber
+from fastapi.responses import RedirectResponse
+from google_auth_oauthlib.flow import Flow
+from google.oauth2.credentials import Credentials as GoogleCredentials
+from google.auth.transport.requests import Request as GoogleRequest
+from googleapiclient.discovery import build as gbuild
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, status, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -1278,6 +1283,243 @@ async def rematch_bank_statement(sid: str, user=Depends(get_current_user)):
     result["filename"] = s.get("filename")
     result["created_at"] = s.get("created_at")
     return result
+
+
+# ---------------------------------------------------------------------------
+# Gmail bank-alert parsing
+# ---------------------------------------------------------------------------
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET", "")
+GMAIL_REDIRECT_URI = os.environ.get("GMAIL_REDIRECT_URI", "")
+APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
+GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.readonly",
+    "openid",
+    "https://www.googleapis.com/auth/userinfo.email",
+]
+_MONTH_ABBR = {"JAN": 1, "FEB": 2, "MAR": 3, "APR": 4, "MAY": 5, "JUN": 6,
+               "JUL": 7, "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11, "DEC": 12}
+_ALERT_TXN_RE = re.compile(r"^([A-Z]{3})\s+(\d{1,2})\s+(\d{4})\s+(.*?)\s+\$([\d,]+\.\d{2})$")
+
+
+def _gmail_client_config():
+    return {"web": {
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+        "token_uri": "https://oauth2.googleapis.com/token",
+    }}
+
+
+def _decode_app_token(token: str) -> Optional[dict]:
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALG])
+        return payload if payload.get("type") == "access" else None
+    except jwt.InvalidTokenError:
+        return None
+
+
+async def _gmail_creds():
+    doc = await db.gmail_tokens.find_one({"key": "primary"})
+    if not doc:
+        return None
+    creds = GoogleCredentials(
+        token=doc.get("access_token"),
+        refresh_token=doc.get("refresh_token"),
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        scopes=GMAIL_SCOPES,
+    )
+    if not creds.valid:
+        if creds.refresh_token:
+            creds.refresh(GoogleRequest())
+            await db.gmail_tokens.update_one({"key": "primary"}, {"$set": {"access_token": creds.token}})
+        else:
+            return None
+    return creds
+
+
+def _extract_plain_text(payload) -> str:
+    """Walk a Gmail message payload and return decoded text/plain (fallback html-stripped)."""
+    import base64 as _b64
+    from html import unescape
+
+    def decode(data):
+        return _b64.urlsafe_b64decode(data.encode("utf-8")).decode("utf-8", errors="ignore")
+
+    text = ""
+    html = ""
+
+    def walk(part):
+        nonlocal text, html
+        mime = part.get("mimeType", "")
+        body = part.get("body", {})
+        data = body.get("data")
+        if mime == "text/plain" and data:
+            text += decode(data)
+        elif mime == "text/html" and data:
+            html += decode(data)
+        for p in part.get("parts", []) or []:
+            walk(p)
+
+    walk(payload)
+    if text.strip():
+        return text
+    stripped = re.sub(r"<[^>]+>", " ", html)
+    return unescape(re.sub(r"\s+", " ", stripped))
+
+
+def parse_alert_email(body: str) -> dict:
+    balance = None
+    mb = re.search(r"Available Balance:\s*\$([\d,]+\.\d{2})", body)
+    if mb:
+        balance = float(mb.group(1).replace(",", ""))
+    txns = []
+    section = None
+    for raw in body.replace("\r", "\n").split("\n"):
+        s = raw.strip()
+        if not s:
+            continue
+        low = s.lower()
+        if low.startswith("deposits over") or low.startswith("deposits "):
+            section = "credit"; continue
+        if low.startswith("withdrawals over") or low.startswith("withdrawals ") or low.startswith("debits"):
+            section = "withdrawal"; continue
+        mt = _ALERT_TXN_RE.match(s)
+        if mt:
+            mon, day, yr, desc, amt = mt.groups()
+            mm = _MONTH_ABBR.get(mon.upper())
+            if not mm:
+                continue
+            kind = section or ("credit" if "deposit" in desc.lower() else "withdrawal")
+            txns.append({
+                "txn_date": f"{int(yr):04d}-{mm:02d}-{int(day):02d}",
+                "description": desc.strip(),
+                "amount": round(float(amt.replace(",", "")), 2),
+                "kind": kind,
+            })
+    return {"available_balance": balance, "transactions": txns}
+
+
+async def _match_txn(kind: str, amount: float, txn_date: str, tol: float = 0.50):
+    if kind == "credit":
+        f = await db.fee_payments.find_one({
+            "paid": True,
+            "amount_paid": {"$gte": amount - tol, "$lte": amount + tol},
+        })
+        if f:
+            return {"type": "fee", "label": f"Unit {f['unit_number']} · {f['owner_name']}"}
+    else:
+        e = await db.expenses.find_one({"amount": {"$gte": amount - tol, "$lte": amount + tol}})
+        if e:
+            label = e.get("category", "Expense")
+            if e.get("vendor"):
+                label += f" · {e['vendor']}"
+            return {"type": "expense", "label": label}
+    return None
+
+
+@api.get("/gmail/status")
+async def gmail_status(user=Depends(get_current_user)):
+    doc = await db.gmail_tokens.find_one({"key": "primary"})
+    return {"connected": bool(doc), "email": doc.get("email") if doc else None,
+            "configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)}
+
+
+@api.get("/oauth/gmail/login")
+async def gmail_login(token: str):
+    if not _decode_app_token(token):
+        raise HTTPException(status_code=401, detail="Invalid token")
+    flow = Flow.from_client_config(_gmail_client_config(), scopes=GMAIL_SCOPES, redirect_uri=GMAIL_REDIRECT_URI)
+    url, state = flow.authorization_url(access_type="offline", prompt="consent", include_granted_scopes="true")
+    await db.oauth_states.insert_one({"state": state, "created_at": now_iso()})
+    return RedirectResponse(url)
+
+
+@api.get("/oauth/gmail/callback")
+async def gmail_callback(code: str = "", state: str = "", error: str = ""):
+    if error or not code:
+        return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=error")
+    st = await db.oauth_states.find_one({"state": state})
+    if not st:
+        return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=error")
+    await db.oauth_states.delete_one({"state": state})
+    import warnings
+    flow = Flow.from_client_config(_gmail_client_config(), scopes=GMAIL_SCOPES, redirect_uri=GMAIL_REDIRECT_URI)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            flow.fetch_token(code=code)
+    except Exception:
+        return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=error")
+    creds = flow.credentials
+    email = None
+    try:
+        oa = gbuild("oauth2", "v2", credentials=creds)
+        email = oa.userinfo().get().execute().get("email")
+    except Exception:
+        pass
+    await db.gmail_tokens.update_one(
+        {"key": "primary"},
+        {"$set": {"key": "primary", "access_token": creds.token, "refresh_token": creds.refresh_token,
+                  "email": email, "connected_at": now_iso()}},
+        upsert=True,
+    )
+    return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=connected")
+
+
+@api.delete("/oauth/gmail")
+async def gmail_disconnect(user=Depends(get_current_user)):
+    await db.gmail_tokens.delete_many({"key": "primary"})
+    return {"ok": True}
+
+
+@api.post("/gmail/sync")
+async def gmail_sync(user=Depends(get_current_user)):
+    creds = await _gmail_creds()
+    if not creds:
+        raise HTTPException(status_code=400, detail="Gmail not connected")
+    service = gbuild("gmail", "v1", credentials=creds)
+    listing = service.users().messages().list(
+        userId="me", q="from:no-reply@hbtbank.com newer_than:1y", maxResults=50,
+    ).execute()
+    ids = [m["id"] for m in listing.get("messages", [])]
+    new = 0
+    for mid in ids:
+        msg = service.users().messages().get(userId="me", id=mid, format="full").execute()
+        headers = {h["name"].lower(): h["value"] for h in msg.get("payload", {}).get("headers", [])}
+        email_date = headers.get("date", "")
+        body = _extract_plain_text(msg.get("payload", {}))
+        parsed = parse_alert_email(body)
+        for idx, t in enumerate(parsed["transactions"]):
+            key = f"{mid}:{idx}"
+            exists = await db.gmail_alerts.find_one({"dedup_key": key})
+            if exists:
+                continue
+            await db.gmail_alerts.insert_one({
+                "dedup_key": key, "message_id": mid, "email_date": email_date,
+                "available_balance": parsed["available_balance"], **t, "created_at": now_iso(),
+            })
+            new += 1
+    total = await db.gmail_alerts.count_documents({})
+    return {"new": new, "total": total}
+
+
+@api.get("/gmail/alerts")
+async def gmail_alerts(user=Depends(get_current_user)):
+    out = []
+    async for a in db.gmail_alerts.find().sort("txn_date", -1):
+        row = _ser(a)
+        row["match"] = await _match_txn(a["kind"], a["amount"], a["txn_date"])
+        out.append(row)
+    return out
+
+
+@api.delete("/gmail/alerts/{aid}")
+async def delete_gmail_alert(aid: str, user=Depends(get_current_user)):
+    await db.gmail_alerts.delete_one({"_id": ObjectId(aid)})
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

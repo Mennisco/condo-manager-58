@@ -13,6 +13,7 @@ import Budget from "@/pages/Budget";
 import FeeIncrease from "@/pages/FeeIncrease";
 import PnL from "@/pages/PnL";
 import BankReconcile from "@/pages/BankReconcile";
+import GmailAlerts from "@/pages/GmailAlerts";
 import Vendors from "@/pages/Vendors";
 import Communications from "@/pages/Communications";
 import Compliance from "@/pages/Compliance";
@@ -71,6 +72,7 @@ function App() {
             <Route path="/fee-increase" element={<FeeIncrease />} />
             <Route path="/pnl" element={<PnL />} />
             <Route path="/bank" element={<BankReconcile />} />
+            <Route path="/gmail" element={<GmailAlerts />} />
             <Route path="/vendors" element={<Vendors />} />
             <Route path="/communications" element={<Communications />} />
             <Route path="/compliance" element={<Compliance />} />
