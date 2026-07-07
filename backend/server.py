@@ -1438,7 +1438,7 @@ async def gmail_login(token: str):
         prompt="consent select_account",
         include_granted_scopes="true",
     )
-    await db.oauth_states.insert_one({"state": state, "created_at": now_iso()})
+    await db.oauth_states.insert_one({"state": state, "code_verifier": flow.code_verifier, "created_at": now_iso()})
     return RedirectResponse(url)
 
 
@@ -1452,12 +1452,13 @@ async def gmail_callback(code: str = "", state: str = "", error: str = ""):
     await db.oauth_states.delete_one({"state": state})
     import warnings
     flow = Flow.from_client_config(_gmail_client_config(), scopes=GMAIL_SCOPES, redirect_uri=GMAIL_REDIRECT_URI)
+    flow.code_verifier = st.get("code_verifier")
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             flow.fetch_token(code=code)
     except Exception:
-        logger.exception("Gmail OAuth fetch_token failed")
+        log.exception("Gmail OAuth fetch_token failed")
         return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=error")
     creds = flow.credentials
     email = None
