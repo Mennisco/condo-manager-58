@@ -32,8 +32,8 @@ export function RecordTransactionModal({ recording, units, onClose, onSaved }) {
 
   const feeMatches = !isExpense
     ? units
-        .map((u) => ({ u, n: u.monthly_fee > 0 ? txn.amount / u.monthly_fee : 0 }))
-        .filter((x) => Math.round(x.n) === x.n && x.n >= 1 && x.n <= 12)
+        .map((u) => ({ u, n: u.monthly_fee > 0 ? Math.round(txn.amount / u.monthly_fee) : 0 }))
+        .filter((x) => x.n >= 1 && x.n <= 12 && Math.abs(txn.amount - x.u.monthly_fee * x.n) < 0.01)
     : [];
 
   const applySuggestion = (unitId, n) => {

@@ -1,5 +1,11 @@
 # Changelog
 
+## July 2026 — Deposit owner suggestions (P1)
+- Bare check deposits (email says only "Deposit", no payer) stay flagged as Review by design — payer identity lives in the check image, not the email. Confirmed with user: deposits are always single-owner, never combined.
+- Backend _suggest_unit_by_name(): for credit deposits whose description contains an owner's first+last name (ACH/P2P like "P2P NFCU ACH WEB JAY S BARLOW"), attaches row["suggested"] {unit_id, unit_number, owner_name} to GET /api/gmail/alerts.
+- Frontend: alert table shows green "Likely: Unit X · Owner" hint for named deposits (still with Record button). RecordTransactionModal pre-selects the suggested owner and shows a "Suggestions" block: by-name chip + amount-based fee-match chips (units whose monthly_fee divides the amount, ticking implied months). Float-safe tolerance on the divide.
+- VERIFIED via testing_agent (iteration_14, 100%): 47 alerts, 2 named deposits show hints (Allie Roe, Jay Barlow), bare deposits show none, modal pre-selects + chips work.
+
 ## July 2026 — Gmail bank-alerts FULLY LIVE (fixed 403 + parser)
 - Resolved OAuth blockers: (1) removed forced login_hint that caused generic Google "403 - that's all we know"; (2) fixed PKCE "Missing code verifier" by persisting flow.code_verifier in oauth_states and restoring it in callback; (3) fixed NameError (logger→log) that turned callback errors into 500s.
 - Rewrote parse_alert_email(): Heartland alerts are HTML-only (no plain-text part) so stripped body is one line. Parser now uses global regex + section-position detection instead of line splitting. Handles "Jul 03 2026 Deposit $288.00" mixed-case month.
