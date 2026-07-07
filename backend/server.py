@@ -1458,6 +1458,7 @@ async def gmail_callback(code: str = "", state: str = "", error: str = ""):
             warnings.simplefilter("ignore")
             flow.fetch_token(code=code)
     except Exception:
+        logger.exception("Gmail OAuth fetch_token failed")
         return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=error")
     creds = flow.credentials
     email = None
