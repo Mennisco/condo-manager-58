@@ -108,6 +108,7 @@ class Unit(BaseDoc):
     monthly_fee: float = 0.0
     late_fee: float = 0.0
     ownership_pct: float = 0.0
+    autopay: Optional[str] = None
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -120,6 +121,7 @@ class UnitIn(BaseModel):
     monthly_fee: float = 0.0
     late_fee: float = 0.0
     ownership_pct: float = 0.0
+    autopay: Optional[str] = None
     notes: Optional[str] = None
 
 
@@ -570,6 +572,9 @@ async def units_balances(user=Depends(get_current_user)):
 _MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
                 "July", "August", "September", "October", "November", "December"]
 
+STATEMENT_LOGO_URL = "https://customer-assets.emergentagent.com/job_assoc-admin-3/artifacts/k5io5897_I1clean.png"
+STATEMENT_LOGO_PATH = str(ROOT_DIR / "assets" / "statement_logo.jpg")
+
 
 def _money(v) -> str:
     try:
@@ -611,6 +616,7 @@ def _statement_html(unit: dict, rows: list, totals: dict, scope_label: str) -> s
         )
     return f"""<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1c1917;max-width:640px;margin:0 auto;padding:8px">
 <div style="border-bottom:2px solid #166534;padding-bottom:12px;margin-bottom:16px">
+  <img src="{STATEMENT_LOGO_URL}" alt="Innsbruck One" style="width:180px;max-width:70%;border-radius:6px;margin-bottom:8px" />
   <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#166534;font-weight:bold">Innsbruck One Condominium Association</div>
   <h2 style="font-size:22px;margin:4px 0">Owner Statement</h2>
   <table style="font-size:13px;width:100%"><tr>
@@ -633,8 +639,9 @@ def _statement_pdf(unit: dict, rows: list, totals: dict, scope_label: str) -> by
     from reportlab.lib.units import inch
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
     from collections import OrderedDict
+    import os
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
@@ -648,7 +655,16 @@ def _statement_pdf(unit: dict, rows: list, totals: dict, scope_label: str) -> by
     yr_style = ParagraphStyle("yr", parent=styles["Heading3"], fontSize=13, spaceBefore=10, spaceAfter=2)
     owner = (unit.get("owner_name") or "").strip()
 
-    elems = [
+    elems = []
+    if os.path.exists(STATEMENT_LOGO_PATH):
+        try:
+            img = Image(STATEMENT_LOGO_PATH, width=2.0 * inch, height=1.53 * inch)
+            img.hAlign = "LEFT"
+            elems.append(img)
+            elems.append(Spacer(1, 6))
+        except Exception:
+            pass
+    elems += [
         Paragraph("INNSBRUCK ONE CONDOMINIUM ASSOCIATION", h_assoc),
         Paragraph("Owner Statement", title),
         Paragraph(
@@ -768,6 +784,63 @@ async def email_statement(unit_id: str, data: StatementEmailIn, user=Depends(get
         log.exception("Gmail send failed")
         raise HTTPException(status_code=502, detail=f"Could not send the email: {e}")
     return {"ok": True, "to": to, "message_id": sent.get("id"), "balance_due": ledger["totals"]["total_short"]}
+
+
+class ReminderEmailIn(BaseModel):
+    to: Optional[str] = None
+    note: Optional[str] = None
+
+
+@api.post("/units/{unit_id}/reminder/email")
+async def email_reminder(unit_id: str, data: ReminderEmailIn, user=Depends(get_current_user)):
+    """Send a short, friendly past-due reminder (no attachment) via the connected Gmail."""
+    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    to = (data.to or unit.get("owner_email") or "").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="No email address on file for this owner.")
+    tok = await db.gmail_tokens.find_one({"key": "primary"})
+    scopes = (tok or {}).get("scopes") or []
+    if not any("gmail.send" in s for s in scopes):
+        raise HTTPException(status_code=428, detail="Reconnect Google to grant send permission (Bank Alerts \u2192 Reconnect).")
+    creds = await _gmail_creds()
+    if not creds:
+        raise HTTPException(status_code=428, detail="Google is not connected. Connect it on the Bank Alerts page first.")
+
+    led = await _build_ledger(unit)
+    overdue = led["totals"]["overdue"]
+    owner = (unit.get("owner_name") or "").strip()
+    note_html = f"<p style='margin:16px 0;padding:12px;background:#f5f5f4;border-radius:6px'>{data.note}</p>" if data.note else ""
+    html = f"""<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1c1917;max-width:560px;margin:0 auto;padding:12px">
+<img src="{STATEMENT_LOGO_URL}" alt="Innsbruck One" style="width:160px;max-width:60%;border-radius:6px" />
+<h2 style="color:#166534;font-size:18px;margin:10px 0 4px">Friendly payment reminder</h2>
+<p>Hi {owner or 'there'},</p>
+<p>Our records show <b>Unit {unit.get('unit_number')}</b> has a past-due balance of
+<b style="color:#b45309">{_money(overdue)}</b>. When you have a moment, please send payment at your convenience.</p>
+{note_html}
+<p>Thank you! If you've already paid or have any questions, just reply to this email.</p>
+<p style="color:#78716c;font-size:12px;margin-top:20px">Innsbruck One Condominium Association</p>
+</body></html>"""
+
+    import base64 as _b64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    msg = MIMEMultipart("alternative")
+    msg["To"] = to
+    msg["From"] = (tok or {}).get("email") or "me"
+    msg["Subject"] = f"Innsbruck One \u2014 Payment reminder (Unit {unit.get('unit_number')})"
+    msg.attach(MIMEText(f"Unit {unit.get('unit_number')} past-due balance: {_money(overdue)}. Please send payment when convenient. Reply with questions.", "plain"))
+    msg.attach(MIMEText(html, "html"))
+    raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode()
+    try:
+        svc = gbuild("gmail", "v1", credentials=creds)
+        sent = svc.users().messages().send(userId="me", body={"raw": raw}).execute()
+    except Exception as e:
+        log.exception("Gmail reminder send failed")
+        raise HTTPException(status_code=502, detail=f"Could not send the email: {e}")
+    return {"ok": True, "to": to, "message_id": sent.get("id"), "overdue": overdue}
 
 
 @api.get("/reports/delinquency")

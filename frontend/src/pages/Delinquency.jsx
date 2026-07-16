@@ -2,15 +2,30 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate } from "@/lib/utils";
-import { Printer, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Printer, AlertTriangle, CheckCircle2, Mail, MessageSquare, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { TextMessageModal } from "@/components/TextMessageModal";
 
 export default function Delinquency() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
+  const [textRow, setTextRow] = useState(null);
+  const [sendingId, setSendingId] = useState(null);
 
   useEffect(() => {
     api.get("/reports/delinquency").then((r) => setData(r.data));
   }, []);
+
+  const emailReminder = async (row) => {
+    setSendingId(row.unit_id);
+    try {
+      const { data: res } = await api.post(`/units/${row.unit_id}/reminder/email`, {});
+      toast.success(`Reminder emailed to ${res.to}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not send reminder");
+    }
+    setSendingId(null);
+  };
 
   if (!data) return <div className="text-[#78716C]">Loading…</div>;
   const { rows, totals } = data;
@@ -59,24 +74,46 @@ export default function Delinquency() {
                 <th className="py-2 pr-3">Contact</th>
                 <th className="py-2 pr-3">Oldest owed</th>
                 <th className="py-2 pr-3 text-center">Months</th>
-                <th className="py-2 text-right">Overdue</th>
+                <th className="py-2 pr-3 text-right">Overdue</th>
+                <th className="py-2 text-right no-print">Remind</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((r) => (
-                <tr key={r.unit_id} data-testid={`delinquency-row-${r.unit_number}`} onClick={() => navigate(`/units/${r.unit_id}`)} className="border-b border-[#F5F5F4] cursor-pointer hover:bg-[#F5F5F4] print:cursor-auto">
-                  <td className="py-3 pr-3 font-semibold">{r.unit_number}</td>
-                  <td className="py-3 pr-3">{r.owner_name}</td>
+                <tr key={r.unit_id} data-testid={`delinquency-row-${r.unit_number}`} className="border-b border-[#F5F5F4]">
+                  <td className="py-3 pr-3 font-semibold cursor-pointer" onClick={() => navigate(`/units/${r.unit_id}`)}>{r.unit_number}</td>
+                  <td className="py-3 pr-3 cursor-pointer" onClick={() => navigate(`/units/${r.unit_id}`)}>{r.owner_name}</td>
                   <td className="py-3 pr-3 text-[#78716C] text-xs">
                     <div>{r.owner_email || "—"}</div>
                     <div>{r.owner_phone || ""}</div>
                   </td>
                   <td className="py-3 pr-3 text-[#78716C]">{r.oldest_owed || "—"}</td>
                   <td className="py-3 pr-3 text-center tabular-nums">{r.months_overdue}</td>
-                  <td className="py-3 text-right">
+                  <td className="py-3 pr-3 text-right">
                     <span className="inline-flex items-center gap-1 font-bold text-[#C53030] tabular-nums">
                       <AlertTriangle size={13} className="print:hidden" /> {fmtMoney(r.overdue)}
                     </span>
+                  </td>
+                  <td className="py-3 text-right no-print">
+                    <div className="flex items-center justify-end gap-2">
+                      <button
+                        data-testid={`remind-email-${r.unit_number}`}
+                        onClick={() => emailReminder(r)}
+                        disabled={sendingId === r.unit_id}
+                        title="Email a past-due reminder"
+                        className="inline-flex items-center gap-1 text-xs font-semibold border border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] rounded-md px-2.5 py-1.5 disabled:opacity-50"
+                      >
+                        {sendingId === r.unit_id ? <Loader2 size={13} className="animate-spin" /> : <Mail size={13} />} Email
+                      </button>
+                      <button
+                        data-testid={`remind-text-${r.unit_number}`}
+                        onClick={() => setTextRow(r)}
+                        title="Prepare a text reminder"
+                        className="inline-flex items-center gap-1 text-xs font-semibold border border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] rounded-md px-2.5 py-1.5"
+                      >
+                        <MessageSquare size={13} /> Text
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -85,11 +122,25 @@ export default function Delinquency() {
               <tr className="border-t-2 border-[#166534] font-bold">
                 <td className="py-3" colSpan={5}>Total overdue</td>
                 <td className="py-3 text-right tabular-nums text-[#C53030]">{fmtMoney(totals.total_overdue)}</td>
+                <td className="no-print"></td>
               </tr>
             </tfoot>
           </table>
         )}
       </div>
+
+      {textRow ? (
+        <TextMessageModal
+          title={`Text reminder — Unit ${textRow.unit_number}`}
+          phone={textRow.owner_phone}
+          initialMessage={
+            `Innsbruck One — Hi ${textRow.owner_name}, a friendly reminder that Unit ${textRow.unit_number} ` +
+            `has a past-due balance of ${fmtMoney(textRow.overdue)}. Please send payment when convenient. ` +
+            `Questions? Reply here. Thank you! — Innsbruck One`
+          }
+          onClose={() => setTextRow(null)}
+        />
+      ) : null}
     </div>
   );
 }

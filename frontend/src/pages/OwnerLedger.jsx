@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, MONTHS } from "@/lib/utils";
-import { ArrowLeft, Printer, Mail, CheckCircle2, AlertTriangle, CircleDollarSign, StickyNote, X, Loader2 } from "lucide-react";
+import { ArrowLeft, Printer, Mail, MessageSquare, CheckCircle2, AlertTriangle, CircleDollarSign, StickyNote, X, Loader2, Repeat } from "lucide-react";
 import { toast } from "sonner";
+import { TextMessageModal } from "@/components/TextMessageModal";
+
+const STATEMENT_LOGO = "https://customer-assets.emergentagent.com/job_assoc-admin-3/artifacts/k5io5897_I1clean.png";
 
 const STATUS = {
   posted: { label: "Posted", cls: "text-[#166534] bg-[#F0FDF4] border-[#BBF7D0]", Icon: CheckCircle2 },
@@ -18,6 +21,7 @@ export default function OwnerLedger() {
   const [err, setErr] = useState(false);
   const [scope, setScope] = useState("all"); // "all" or a year string
   const [emailOpen, setEmailOpen] = useState(false);
+  const [textOpen, setTextOpen] = useState(false);
 
   const load = () => api.get(`/units/${unitId}/ledger`).then((r) => setData(r.data)).catch(() => setErr(true));
   useEffect(() => { load(); }, [unitId]);
@@ -81,6 +85,13 @@ export default function OwnerLedger() {
             <Mail size={16} /> Email statement
           </button>
           <button
+            data-testid="text-statement-btn"
+            onClick={() => setTextOpen(true)}
+            className="border border-[#166534] text-[#166534] hover:bg-[#F0FDF4] px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
+          >
+            <MessageSquare size={16} /> Text
+          </button>
+          <button
             data-testid="print-statement-btn"
             onClick={() => window.print()}
             className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
@@ -97,6 +108,16 @@ export default function OwnerLedger() {
         <SummaryCard label="Balance due" value={fmtMoney(balance)} accent={balance > 0.005 ? "text-[#C53030]" : "text-[#166534]"} />
         <SummaryCard label="Months paid / late" value={`${scopedTotals.months_paid} / ${scopedTotals.months_late}`} />
       </div>
+
+      {unit.autopay ? (
+        <div data-testid="autopay-card" className="no-print bg-[#F0FDF4] border border-[#BBF7D0] rounded-lg px-5 py-4 flex items-center gap-3">
+          <Repeat size={18} className="text-[#166534] shrink-0" />
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#166534]">Autopay / ACH</div>
+            <div className="text-sm text-[#1C1917]">{unit.autopay}</div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Screen history, grouped by year */}
       <div className="no-print space-y-6">
@@ -162,6 +183,20 @@ export default function OwnerLedger() {
           scopeLabel={scopeLabel}
           balance={balance}
           onClose={() => setEmailOpen(false)}
+        />
+      ) : null}
+
+      {textOpen ? (
+        <TextMessageModal
+          title="Text statement summary"
+          phone={unit.owner_phone}
+          initialMessage={
+            `Innsbruck One — Unit ${unit.unit_number} (${unit.owner_name?.trim()}). ` +
+            `Statement ${scopeLabel}: billed ${fmtMoney(scopedTotals.total_due)}, ` +
+            `paid ${fmtMoney(scopedTotals.total_paid)}, balance due ${fmtMoney(balance)}. ` +
+            `Questions? Reply here. — Innsbruck One`
+          }
+          onClose={() => setTextOpen(false)}
         />
       ) : null}
     </div>
@@ -262,6 +297,7 @@ function StatementDoc({ unit, rows, totals, years, balance, scopeLabel }) {
   return (
     <div data-testid="statement-doc" className="hidden print:block print-area">
       <div className="border-b-2 border-[#166534] pb-4 mb-6">
+        <img src={STATEMENT_LOGO} alt="Innsbruck One" className="w-48 rounded-md mb-3" />
         <div className="text-xs uppercase tracking-[0.2em] font-bold text-[#166534]">Innsbruck One Condominium Association</div>
         <h2 className="font-display text-2xl font-bold mt-1">Owner Statement</h2>
         <div className="text-sm mt-3 grid grid-cols-2 gap-y-1">

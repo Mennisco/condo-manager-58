@@ -12,6 +12,7 @@ const empty = {
   owner_phone: "",
   monthly_fee: 0,
   late_fee: 0,
+  autopay: "",
   notes: "",
 };
 
@@ -58,6 +59,7 @@ export default function Units() {
       owner_phone: u.owner_phone || "",
       monthly_fee: u.monthly_fee || 0,
       late_fee: u.late_fee || 0,
+      autopay: u.autopay || "",
       notes: u.notes || "",
     });
     setOpen(true);
@@ -165,6 +167,9 @@ export default function Units() {
               </Field>
               <Field label="Owner phone">
                 <input value={form.owner_phone} onChange={(e) => setForm({ ...form, owner_phone: e.target.value })} className={inp} />
+              </Field>
+              <Field label="Autopay / ACH detail" full>
+                <input data-testid="unit-autopay-input" value={form.autopay} onChange={(e) => setForm({ ...form, autopay: e.target.value })} placeholder="e.g. ACH autopay — Heartland DDA #6010792 (leave blank if pays manually)" className={inp} />
               </Field>
               <Field label="Notes" full>
                 <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className={inp} />
