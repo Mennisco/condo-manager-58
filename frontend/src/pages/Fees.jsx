@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, MONTHS } from "@/lib/utils";
-import { Check, X, Loader2, AlertTriangle, Trash2, Plus } from "lucide-react";
+import { Check, X, Loader2, AlertTriangle, Trash2, Plus, StickyNote } from "lucide-react";
 import { toast } from "sonner";
 import { MakeupModal } from "@/components/MakeupModal";
 
@@ -140,7 +140,16 @@ export default function Fees() {
             ) : fees.map((f) => (
               <tr key={f.id} data-testid={`fee-row-${f.unit_number}`} className={`border-t border-[#E7E5E4] hover:bg-[#F5F5F4] ${f.short > 0 ? "bg-[#FFFBEB]/60" : ""}`}>
                 <td className="px-6 py-4 font-semibold">{f.unit_number}</td>
-                <td className="px-6 py-4">{f.owner_name}</td>
+                <td className="px-6 py-4">
+                  <div className="flex items-center gap-1.5">
+                    {f.owner_name}
+                    {f.notes ? (
+                      <span data-testid={`fee-note-${f.unit_number}`} title={f.notes} className="text-[#B45309] cursor-help">
+                        <StickyNote size={13} />
+                      </span>
+                    ) : null}
+                  </div>
+                </td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(f.amount_due)}</td>
                 <td className="px-6 py-4 text-right tabular-nums">
                   {f.late_fee > 0 ? (

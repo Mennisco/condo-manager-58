@@ -1,5 +1,9 @@
 # Changelog
 
+## July 2026 (session 2c) — Imported spreadsheet notes
+- Imported all 31 embedded cell comments from "Mo. Fees Log" onto matching fee_payment.notes (check #s, wire details, "PIF thru 12/31", prepayment ranges). Mapped by year-block + row-index (handles prior owners: Christina Fogarty->601 Allie Roe, Ted Johnson->607 Jeff). All 31 matched existing rows; 0 missing.
+- Surfaced notes in UI: amber note icon (StickyNote) with hover tooltip next to owner name on the Monthly Fees page (data-testid fee-note-<unit>).
+
 ## July 2026 (session 2b) — Make-up payment + Posting page + manual late fees
 - FEATURE: "Record make-up payment" — POST /api/fees/makeup distributes one check across a unit's underpaid months oldest-first; GET /api/fees/shortfall/{unit_id} lists short months + total. Fees page "Make-up payment" button + MakeupModal (unit picker, live shortfall preview, amount/date). Verified: $72 clears Jeff's 6 months, $48 Earl.
 - FEATURE: new "Posting" page (/posting, nav ListChecks) — monthly routine: mark each unit paid (auto-fills amount=rate, date=now, method), method dropdown, progress stats (X/10 posted, collected, late count). Unpaid units past the 10th flag "Late".
