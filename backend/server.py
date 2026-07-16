@@ -1322,7 +1322,7 @@ def _decode_app_token(token: str) -> Optional[dict]:
 
 async def _gmail_creds():
     doc = await db.gmail_tokens.find_one({"key": "primary"})
-    if not doc:
+    if not doc or not doc.get("refresh_token"):
         return None
     creds = GoogleCredentials(
         token=doc.get("access_token"),
@@ -1332,12 +1332,14 @@ async def _gmail_creds():
         client_secret=GOOGLE_CLIENT_SECRET,
         scopes=GMAIL_SCOPES,
     )
-    if not creds.valid:
-        if creds.refresh_token:
-            creds.refresh(GoogleRequest())
-            await db.gmail_tokens.update_one({"key": "primary"}, {"$set": {"access_token": creds.token}})
-        else:
-            return None
+    try:
+        creds.refresh(GoogleRequest())
+    except Exception:
+        # refresh token expired/revoked (common in Google "Testing" mode ~7 days) -> clear so UI shows reconnect
+        log.warning("Gmail refresh failed; clearing stored token")
+        await db.gmail_tokens.delete_many({"key": "primary"})
+        return None
+    await db.gmail_tokens.update_one({"key": "primary"}, {"$set": {"access_token": creds.token}})
     return creds
 
 
@@ -1441,8 +1443,12 @@ async def _match_txn(kind: str, amount: float, txn_date: str, tol: float = 0.50)
 
 @api.get("/gmail/status")
 async def gmail_status(user=Depends(get_current_user)):
+    email = None
     doc = await db.gmail_tokens.find_one({"key": "primary"})
-    return {"connected": bool(doc), "email": doc.get("email") if doc else None,
+    if doc:
+        email = doc.get("email")
+    creds = await _gmail_creds()  # validates/refreshes; clears the token if expired/revoked
+    return {"connected": bool(creds), "email": email if creds else None,
             "configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)}
 
 
