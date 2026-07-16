@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, MONTHS } from "@/lib/utils";
-import { ArrowLeft, Printer, CheckCircle2, AlertTriangle, CircleDollarSign, StickyNote } from "lucide-react";
+import { ArrowLeft, Printer, Mail, CheckCircle2, AlertTriangle, CircleDollarSign, StickyNote, X, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 const STATUS = {
   posted: { label: "Posted", cls: "text-[#166534] bg-[#F0FDF4] border-[#BBF7D0]", Icon: CheckCircle2 },
@@ -15,17 +16,32 @@ export default function OwnerLedger() {
   const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [err, setErr] = useState(false);
+  const [scope, setScope] = useState("all"); // "all" or a year string
+  const [emailOpen, setEmailOpen] = useState(false);
 
-  useEffect(() => {
-    api.get(`/units/${unitId}/ledger`).then((r) => setData(r.data)).catch(() => setErr(true));
-  }, [unitId]);
+  const load = () => api.get(`/units/${unitId}/ledger`).then((r) => setData(r.data)).catch(() => setErr(true));
+  useEffect(() => { load(); }, [unitId]);
 
   if (err) return <div data-testid="ledger-error" className="text-[#C53030]">Could not load this owner's history.</div>;
   if (!data) return <div className="text-[#78716C]">Loading…</div>;
 
-  const { unit, rows, totals } = data;
-  const years = [...new Set(rows.map((r) => r.period_year))].sort((a, b) => b - a);
-  const balance = totals.total_short;
+  const { unit, rows: allRows, totals: allTotals } = data;
+  const allYears = [...new Set(allRows.map((r) => r.period_year))].sort((a, b) => b - a);
+  const rows = scope === "all" ? allRows : allRows.filter((r) => r.period_year === Number(scope));
+  const years = scope === "all" ? allYears : [Number(scope)];
+  // Scoped totals
+  const totals = scope === "all" ? allTotals : rows.reduce((a, r) => {
+    a.total_due += r.amount_due;
+    a.total_paid += r.paid ? r.amount_paid : 0;
+    if (r.paid) a.months_paid += 1;
+    if (r.is_late) a.months_late += 1;
+    return a;
+  }, { total_due: 0, total_paid: 0, months_paid: 0, months_late: 0 });
+  const scopedTotals = scope === "all" ? allTotals : {
+    ...totals, total_short: Math.round((totals.total_due - totals.total_paid) * 100) / 100,
+  };
+  const balance = scopedTotals.total_short;
+  const scopeLabel = scope === "all" ? "All years" : scope;
 
   return (
     <div data-testid="owner-ledger-page" className="space-y-6">
@@ -44,21 +60,42 @@ export default function OwnerLedger() {
           </h1>
           <p className="text-[#78716C] mt-1">Full payment history and running balance.</p>
         </div>
-        <button
-          data-testid="print-statement-btn"
-          onClick={() => window.print()}
-          className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
-        >
-          <Printer size={16} /> Print statement
-        </button>
+        <div className="flex items-end gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#78716C] mb-1.5">Coverage</div>
+            <select
+              data-testid="ledger-year-select"
+              value={scope}
+              onChange={(e) => setScope(e.target.value)}
+              className="border border-[#D6D3D1] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#166534]"
+            >
+              <option value="all">All years</option>
+              {allYears.map((y) => <option key={y} value={String(y)}>{y}</option>)}
+            </select>
+          </div>
+          <button
+            data-testid="email-statement-btn"
+            onClick={() => setEmailOpen(true)}
+            className="border border-[#166534] text-[#166534] hover:bg-[#F0FDF4] px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
+          >
+            <Mail size={16} /> Email statement
+          </button>
+          <button
+            data-testid="print-statement-btn"
+            onClick={() => window.print()}
+            className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
+          >
+            <Printer size={16} /> Print statement
+          </button>
+        </div>
       </div>
 
       {/* Screen summary cards */}
       <div className="no-print grid grid-cols-2 md:grid-cols-4 gap-4">
-        <SummaryCard label="Total billed" value={fmtMoney(totals.total_due)} />
-        <SummaryCard label="Total paid" value={fmtMoney(totals.total_paid)} accent="text-[#166534]" />
+        <SummaryCard label={`Total billed · ${scopeLabel}`} value={fmtMoney(scopedTotals.total_due)} />
+        <SummaryCard label="Total paid" value={fmtMoney(scopedTotals.total_paid)} accent="text-[#166534]" />
         <SummaryCard label="Balance due" value={fmtMoney(balance)} accent={balance > 0.005 ? "text-[#C53030]" : "text-[#166534]"} />
-        <SummaryCard label="Months paid / late" value={`${totals.months_paid} / ${totals.months_late}`} />
+        <SummaryCard label="Months paid / late" value={`${scopedTotals.months_paid} / ${scopedTotals.months_late}`} />
       </div>
 
       {/* Screen history, grouped by year */}
@@ -110,18 +147,118 @@ export default function OwnerLedger() {
         ))}
         {rows.length === 0 ? (
           <div className="bg-white border border-[#E7E5E4] rounded-lg p-10 text-center text-[#78716C]">
-            No fee records yet for this unit.
+            No fee records for this {scope === "all" ? "unit" : "year"}.
           </div>
         ) : null}
       </div>
 
       {/* Print-only statement */}
-      <StatementDoc unit={unit} rows={rows} totals={totals} years={years} balance={balance} />
+      <StatementDoc unit={unit} rows={rows} totals={scopedTotals} years={years} balance={balance} scopeLabel={scopeLabel} />
+
+      {emailOpen ? (
+        <EmailStatementModal
+          unit={unit}
+          scope={scope}
+          scopeLabel={scopeLabel}
+          balance={balance}
+          onClose={() => setEmailOpen(false)}
+        />
+      ) : null}
     </div>
   );
 }
 
-function StatementDoc({ unit, rows, totals, years, balance }) {
+function EmailStatementModal({ unit, scope, scopeLabel, balance, onClose }) {
+  const [to, setTo] = useState(unit.owner_email || "");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    api.get("/gmail/status").then((r) => setStatus(r.data)).catch(() => setStatus({ connected: false }));
+  }, []);
+
+  const send = async () => {
+    if (!to.trim()) { toast.error("Enter a recipient email"); return; }
+    setSending(true);
+    try {
+      const body = { to: to.trim(), note: note.trim() || null };
+      if (scope !== "all") body.year = Number(scope);
+      const { data } = await api.post(`/units/${unit.id}/statement/email`, body);
+      toast.success(`Statement emailed to ${data.to}`);
+      onClose();
+    } catch (e) {
+      const detail = e.response?.data?.detail || "Could not send the email";
+      toast.error(detail);
+    }
+    setSending(false);
+  };
+
+  const canSend = status?.can_send;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" data-testid="email-statement-modal">
+      <div className="bg-white border border-[#E7E5E4] rounded-lg w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-display text-xl font-semibold">Email statement</div>
+          <button onClick={onClose} data-testid="close-email-modal"><X size={18} /></button>
+        </div>
+
+        {status && !canSend ? (
+          <div data-testid="email-needs-reconnect" className="bg-[#FFFBEB] border border-[#FDE68A] rounded-md p-3 text-sm text-[#92400E] mb-4">
+            {status.connected
+              ? "Reconnect Google to grant permission to send email. Go to Bank Alerts → Reconnect Google (approve the send permission)."
+              : "Google isn't connected. Go to Bank Alerts and connect your Gmail (approve the send permission) to email statements."}
+          </div>
+        ) : null}
+
+        <div className="space-y-4">
+          <div className="text-sm text-[#78716C]">
+            Sending Unit <b className="text-[#1C1917]">{unit.unit_number}</b> · {unit.owner_name?.trim()} statement
+            for <b className="text-[#1C1917]">{scopeLabel}</b>. Balance due: <b className={balance > 0.005 ? "text-[#C53030]" : "text-[#166534]"}>{fmtMoney(balance)}</b>.
+            Includes a PDF attachment.
+          </div>
+          <label className="block">
+            <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C] mb-1.5">Recipient</div>
+            <input
+              data-testid="email-to-input"
+              type="email"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              placeholder="owner@example.com"
+              className="w-full border border-[#E7E5E4] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#166534]/40 focus:border-[#166534]"
+            />
+          </label>
+          <label className="block">
+            <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C] mb-1.5">Personal note (optional)</div>
+            <textarea
+              data-testid="email-note-input"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              placeholder="Add a short message to the owner…"
+              className="w-full border border-[#E7E5E4] rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#166534]/40 focus:border-[#166534]"
+            />
+          </label>
+        </div>
+
+        <div className="mt-6 flex gap-3 justify-end">
+          <button onClick={onClose} className="px-4 py-2 rounded-md border border-[#E7E5E4]">Cancel</button>
+          <button
+            data-testid="send-statement-btn"
+            onClick={send}
+            disabled={sending || !canSend}
+            className="px-4 py-2 rounded-md bg-[#166534] text-white font-semibold flex items-center gap-2 disabled:opacity-50"
+          >
+            {sending ? <Loader2 size={15} className="animate-spin" /> : <Mail size={15} />} Send
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatementDoc({ unit, rows, totals, years, balance, scopeLabel }) {
   return (
     <div data-testid="statement-doc" className="hidden print:block print-area">
       <div className="border-b-2 border-[#166534] pb-4 mb-6">
@@ -131,6 +268,7 @@ function StatementDoc({ unit, rows, totals, years, balance }) {
           <div><span className="text-[#78716C]">Unit:</span> <span className="font-semibold">{unit.unit_number}</span></div>
           <div><span className="text-[#78716C]">Statement date:</span> <span className="font-semibold">{fmtDate(new Date().toISOString())}</span></div>
           <div><span className="text-[#78716C]">Owner:</span> <span className="font-semibold">{unit.owner_name?.trim()}</span></div>
+          <div><span className="text-[#78716C]">Coverage:</span> <span className="font-semibold">{scopeLabel}</span></div>
           <div><span className="text-[#78716C]">Monthly fee:</span> <span className="font-semibold">{fmtMoney(unit.monthly_fee)}</span></div>
         </div>
       </div>
@@ -164,7 +302,7 @@ function StatementDoc({ unit, rows, totals, years, balance }) {
       ))}
 
       <div className="border-t-2 border-[#166534] pt-3 mt-4 text-sm">
-        <div className="flex justify-between"><span>Total billed (all-time)</span><span className="tabular-nums font-semibold">{fmtMoney(totals.total_due)}</span></div>
+        <div className="flex justify-between"><span>Total billed ({scopeLabel})</span><span className="tabular-nums font-semibold">{fmtMoney(totals.total_due)}</span></div>
         <div className="flex justify-between"><span>Total paid</span><span className="tabular-nums font-semibold">{fmtMoney(totals.total_paid)}</span></div>
         <div className="flex justify-between text-base font-bold mt-1 pt-1 border-t border-[#ddd]">
           <span>Balance due</span>

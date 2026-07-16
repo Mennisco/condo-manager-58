@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { fmtMoney } from "@/lib/utils";
-import { Plus, MoreHorizontal, Home, X } from "lucide-react";
+import { Plus, MoreHorizontal, Home, X, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 
 const empty = {
@@ -18,11 +18,15 @@ const empty = {
 export default function Units() {
   const navigate = useNavigate();
   const [units, setUnits] = useState([]);
+  const [balances, setBalances] = useState({});
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
   const [editing, setEditing] = useState(null);
 
-  const load = () => api.get("/units").then((r) => setUnits(r.data));
+  const load = () => {
+    api.get("/units").then((r) => setUnits(r.data));
+    api.get("/units/balances").then((r) => setBalances(r.data)).catch(() => {});
+  };
   useEffect(() => { load(); }, []);
 
   const onSubmit = async (e) => {
@@ -93,12 +97,13 @@ export default function Units() {
               <th className="px-6 py-3">Phone</th>
               <th className="px-6 py-3 text-right">Monthly Fee</th>
               <th className="px-6 py-3 text-right">Late Fee</th>
+              <th className="px-6 py-3 text-right">Balance</th>
               <th className="px-6 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {units.length === 0 ? (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-[#78716C]">
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-[#78716C]">
                 <Home size={24} className="mx-auto mb-2 opacity-50" />
                 No units yet. Add your first unit to get started.
               </td></tr>
@@ -112,6 +117,15 @@ export default function Units() {
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_phone || "—"}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(u.monthly_fee)}</td>
                 <td className="px-6 py-4 text-right tabular-nums text-[#78716C]">{fmtMoney(u.late_fee)}</td>
+                <td className="px-6 py-4 text-right">
+                  {balances[u.id]?.overdue > 0.005 ? (
+                    <span data-testid={`unit-balance-${u.unit_number}`} className="inline-flex items-center gap-1 text-xs font-bold text-[#C53030] bg-[#FEF2F2] border border-[#FECACA] rounded-full px-2.5 py-1 tabular-nums">
+                      <AlertTriangle size={12} /> {fmtMoney(balances[u.id].overdue)} due
+                    </span>
+                  ) : (
+                    <span data-testid={`unit-balance-${u.unit_number}`} className="text-xs text-[#166534] font-semibold">Current</span>
+                  )}
+                </td>
                 <td className="px-6 py-4 text-right relative" onClick={(e) => e.stopPropagation()}>
                   <RowMenu
                     unit={u}

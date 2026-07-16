@@ -20,6 +20,7 @@ import Vendors from "@/pages/Vendors";
 import Communications from "@/pages/Communications";
 import Compliance from "@/pages/Compliance";
 import Reports from "@/pages/Reports";
+import Delinquency from "@/pages/Delinquency";
 
 function Protected() {
   const { user } = useAuth();
@@ -81,6 +82,7 @@ function App() {
             <Route path="/communications" element={<Communications />} />
             <Route path="/compliance" element={<Compliance />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/delinquency" element={<Delinquency />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

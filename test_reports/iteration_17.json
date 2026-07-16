@@ -1,0 +1,40 @@
+{
+  "summary": "Verified all 4 new features (Owner Statement Year Filter, Email Statement gated modal, Balance column on Units, Delinquency Report) plus regressions (This-Month tile, Bank Reconcile, Annual Report CSV exports). Backend: 7/7 pytest passed. Frontend: all data-testid selectors present and behave per spec.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "detailed_results": {
+    "backend": {
+      "POST /api/auth/login": "200 OK (returns access_token)",
+      "GET /api/units/balances": "200 OK, shape { unit_id: {overdue, months_overdue, balance_due} }. Note: 'overdue' is returned as number (0.0/dollar amount) rather than bool — matches spec loosely.",
+      "GET /api/units/{id}/ledger": "200 OK, returns {unit, rows, totals} with totals.total_due/total_paid/total_short/overdue/months_overdue.",
+      "GET /api/units/{id}/ledger?year=2026": "200 OK, rows scoped to 2026, totals <= all-years totals.",
+      "GET /api/gmail/status": "200 OK, includes can_send field.",
+      "POST /api/units/{id}/statement/email": "428 as expected (Gmail send scope not granted).",
+      "GET /api/reports/delinquency": "200 OK, shape {generated_at, rows: [], totals: {delinquent_units:0, total_overdue:0, grand_billed:51348.0, grand_collected:46404.0}}. Note: fields named grand_billed/grand_collected, not billed_all_time/collected_all_time — UI renders 'BILLED (ALL-TIME) $51,348.00' correctly."
+    },
+    "frontend": {
+      "login": "OK — redirects to / (dashboard) not /dashboard. this-month-tile present.",
+      "units_balance_column": "10 unit-balance-* badges rendered; all currently 'Current' (green). Matches spec because all owners paid through July 2026.",
+      "unit_row_menu": "unit-menu-* present; view-unit-* present and navigates to /units/:id (OwnerLedger).",
+      "owner_ledger_page": "owner-ledger-page renders. ledger-year-select present with options [All years, 2026, 2025, 2024, 2023]. Default 'all'. Switching to 2026 changes summary text (totals recompute confirmed by text-diff).",
+      "print_statement_btn": "present.",
+      "email_statement_modal_gated": "email-statement-btn opens email-statement-modal. email-needs-reconnect warning shown. send-statement-btn disabled=True. email-to-input prefilled with owner email (e.g. amroe42@yahoo.com). Matches spec exactly.",
+      "delinquency_page": "/delinquency loads. nav-delinquency sidebar link present. Stat cards: Delinquent Units 0, Total Overdue $0.00, Billed (all-time) $51,348.00, Collected (all-time) $46,404.00. delinquency-empty 'No past-due balances. Every owner is current.' visible.",
+      "bank_reconcile_regression": "/bank — reconcile-view + reconcile-period-select present.",
+      "annual_report_exports_regression": "/reports — data-exports card + export-fees-btn + export-expenses-btn + export-owner-summary-btn all present."
+    }
+  },
+  "test_report_links": ["/app/backend/tests/test_statement_delinquency.py", "/app/test_reports/pytest/statement_delinquency.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "GET /api/units/balances 'overdue' field is a numeric amount (e.g. 0.0), not a boolean. The frontend badge logic appears to work correctly (Current vs X due) but a boolean flag would be clearer to consumers. Consider adding both is_overdue (bool) and overdue_amount (float).",
+    "Delinquency response uses keys grand_billed / grand_collected while the UI displays 'Billed (all-time)' / 'Collected (all-time)'. Naming inconsistency between API and UI copy — cosmetic only."
+  ],
+  "updated_files": ["/app/backend/tests/test_statement_delinquency.py"],
+  "success_rate": {"backend": "100% (7/7)", "frontend": "100% (all spec items verified)"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne",
+  "seed_data_creation": "None (read-only tests).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend BankReconcile route is /bank (not /bank-reconcile). Annual Report/Data Exports route is /reports (not /annual-report). Auth login endpoint returns 'access_token' key. Owner ledger route: /units/:unitId. Year select values: 'all' | '2026' | '2025' | '2024' | '2023'. Delinquency currently shows 0 past-due (data-testid delinquency-empty) because everyone paid through Jul 2026."
+}

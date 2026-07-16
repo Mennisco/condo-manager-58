@@ -13,6 +13,7 @@ import {
   MessageSquare,
   ClipboardCheck,
   FileBarChart2,
+  AlertOctagon,
   LogOut,
   Building2,
   ListChecks,
@@ -34,6 +35,7 @@ const links = [
   { to: "/vendors", label: "Vendors", icon: Users, testid: "nav-vendors" },
   { to: "/communications", label: "Communications", icon: MessageSquare, testid: "nav-comm" },
   { to: "/compliance", label: "Tax & Compliance", icon: ClipboardCheck, testid: "nav-compliance" },
+  { to: "/delinquency", label: "Delinquency", icon: AlertOctagon, testid: "nav-delinquency" },
   { to: "/reports", label: "Annual Report", icon: FileBarChart2, testid: "nav-reports" },
 ];
 

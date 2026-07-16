@@ -474,20 +474,19 @@ async def apply_fees(rows: List[ApplyFeeRow], user=Depends(get_current_user)):
     return {"updated": n}
 
 
-@api.get("/units/{unit_id}/ledger")
-async def unit_ledger(unit_id: str, user=Depends(get_current_user)):
-    """Full payment history for one unit: every month, with status/short/late, plus lifetime totals."""
-    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
-    if not unit:
-        raise HTTPException(status_code=404, detail="Unit not found")
+async def _build_ledger(unit: dict, year: Optional[int] = None) -> dict:
+    """Compute a unit's month-by-month ledger (optionally scoped to one year) + totals."""
     late_fee = float(unit.get("late_fee", 0) or 0)
     today = datetime.now(timezone.utc).date()
+    now_ym = (today.year, today.month)
+    q = {"unit_id": str(unit["_id"])}
+    if year is not None:
+        q["period_year"] = year
     rows = []
     total_due = total_paid = 0.0
-    months_paid = months_unpaid = months_late = 0
-    async for f in db.fee_payments.find({"unit_id": unit_id}).sort(
-        [("period_year", 1), ("period_month", 1)]
-    ):
+    overdue = 0.0
+    months_paid = months_unpaid = months_late = months_overdue = 0
+    async for f in db.fee_payments.find(q).sort([("period_year", 1), ("period_month", 1)]):
         due = float(f.get("amount_due", 0) or 0)
         paid = float(f.get("amount_paid", 0) or 0)
         is_paid = bool(f.get("paid"))
@@ -513,6 +512,9 @@ async def unit_ledger(unit_id: str, user=Depends(get_current_user)):
             months_paid += 1
         if is_late:
             months_late += 1
+        if short > 0 and (f["period_year"], f["period_month"]) < now_ym:
+            overdue += short
+            months_overdue += 1
         total_due += due
         total_paid += eff_paid
         rows.append({
@@ -531,10 +533,281 @@ async def unit_ledger(unit_id: str, user=Depends(get_current_user)):
             "total_due": round(total_due, 2),
             "total_paid": round(total_paid, 2),
             "total_short": round(total_due - total_paid, 2),
+            "overdue": round(overdue, 2),
             "months_paid": months_paid,
             "months_unpaid": months_unpaid,
             "months_late": months_late,
+            "months_overdue": months_overdue,
             "late_fee": late_fee,
+        },
+    }
+
+
+@api.get("/units/{unit_id}/ledger")
+async def unit_ledger(unit_id: str, year: Optional[int] = None, user=Depends(get_current_user)):
+    """Full payment history for one unit: every month, with status/short/late, plus lifetime totals."""
+    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    return await _build_ledger(unit, year)
+
+
+@api.get("/units/balances")
+async def units_balances(user=Depends(get_current_user)):
+    """Per-unit overdue (past-due) and all-time balance, for reminder badges on the Units list."""
+    out = {}
+    async for u in db.units.find():
+        led = await _build_ledger(u)
+        t = led["totals"]
+        out[str(u["_id"])] = {
+            "overdue": t["overdue"],
+            "months_overdue": t["months_overdue"],
+            "balance_due": t["total_short"],
+        }
+    return out
+
+
+_MONTH_NAMES = ["January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"]
+
+
+def _money(v) -> str:
+    try:
+        return f"${float(v):,.2f}"
+    except Exception:
+        return "$0.00"
+
+
+def _statement_html(unit: dict, rows: list, totals: dict, scope_label: str) -> str:
+    from collections import OrderedDict
+    by_year = OrderedDict()
+    for r in rows:
+        by_year.setdefault(r["period_year"], []).append(r)
+    owner = (unit.get("owner_name") or "").strip()
+    year_blocks = ""
+    for y, yr_rows in by_year.items():
+        body = ""
+        for r in sorted(yr_rows, key=lambda x: x["period_month"]):
+            late = " (late)" if r.get("is_late") else ""
+            paid = _money(r["amount_paid"]) if r["paid"] else "—"
+            bal = _money(r["short"]) if r["short"] > 0 else "—"
+            body += (
+                f"<tr>"
+                f"<td style='padding:4px 8px;border-bottom:1px solid #eee'>{_MONTH_NAMES[r['period_month']-1]}{late}</td>"
+                f"<td style='padding:4px 8px;border-bottom:1px solid #eee;text-align:right'>{_money(r['amount_due'])}</td>"
+                f"<td style='padding:4px 8px;border-bottom:1px solid #eee;text-align:right'>{paid}</td>"
+                f"<td style='padding:4px 8px;border-bottom:1px solid #eee'>{r.get('paid_date') or '—'}</td>"
+                f"<td style='padding:4px 8px;border-bottom:1px solid #eee;text-align:right'>{bal}</td>"
+                f"</tr>"
+            )
+        year_blocks += (
+            f"<h3 style='font-size:15px;margin:16px 0 4px'>{y}</h3>"
+            f"<table style='width:100%;border-collapse:collapse;font-size:13px'>"
+            f"<thead><tr style='text-align:left;border-bottom:2px solid #333'>"
+            f"<th style='padding:4px 8px'>Month</th><th style='padding:4px 8px;text-align:right'>Due</th>"
+            f"<th style='padding:4px 8px;text-align:right'>Paid</th><th style='padding:4px 8px'>Paid date</th>"
+            f"<th style='padding:4px 8px;text-align:right'>Balance</th></tr></thead>"
+            f"<tbody>{body}</tbody></table>"
+        )
+    return f"""<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1c1917;max-width:640px;margin:0 auto;padding:8px">
+<div style="border-bottom:2px solid #166534;padding-bottom:12px;margin-bottom:16px">
+  <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#166534;font-weight:bold">Innsbruck One Condominium Association</div>
+  <h2 style="font-size:22px;margin:4px 0">Owner Statement</h2>
+  <table style="font-size:13px;width:100%"><tr>
+    <td>Unit: <b>{unit.get('unit_number')}</b></td><td>Statement date: <b>{datetime.now(timezone.utc).strftime('%b %d, %Y')}</b></td></tr>
+    <tr><td>Owner: <b>{owner}</b></td><td>Coverage: <b>{scope_label}</b></td></tr>
+    <tr><td>Monthly fee: <b>{_money(unit.get('monthly_fee'))}</b></td><td></td></tr></table>
+</div>
+{year_blocks}
+<div style="border-top:2px solid #166534;padding-top:10px;margin-top:16px;font-size:14px">
+  <div style="display:flex;justify-content:space-between"><span>Total billed ({scope_label})</span><b>{_money(totals['total_due'])}</b></div>
+  <div style="display:flex;justify-content:space-between"><span>Total paid</span><b>{_money(totals['total_paid'])}</b></div>
+  <div style="display:flex;justify-content:space-between;font-size:16px;font-weight:bold;border-top:1px solid #ddd;margin-top:4px;padding-top:4px"><span>Balance due</span><span>{_money(totals['total_short'])}</span></div>
+</div>
+<p style="font-size:11px;color:#78716c;margin-top:24px">Late fees, when assessed, are applied manually by the treasurer and are not reflected above unless recorded. Questions? Just reply to this email.</p>
+</body></html>"""
+
+
+def _statement_pdf(unit: dict, rows: list, totals: dict, scope_label: str) -> bytes:
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.units import inch
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from collections import OrderedDict
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=letter, topMargin=0.6 * inch, bottomMargin=0.6 * inch,
+                            leftMargin=0.7 * inch, rightMargin=0.7 * inch)
+    styles = getSampleStyleSheet()
+    green = colors.HexColor("#166534")
+    h_assoc = ParagraphStyle("assoc", parent=styles["Normal"], fontSize=9, textColor=green,
+                             leading=12, spaceAfter=2, fontName="Helvetica-Bold")
+    title = ParagraphStyle("title", parent=styles["Title"], fontSize=20, spaceAfter=6, alignment=0)
+    meta = ParagraphStyle("meta", parent=styles["Normal"], fontSize=10, leading=15)
+    yr_style = ParagraphStyle("yr", parent=styles["Heading3"], fontSize=13, spaceBefore=10, spaceAfter=2)
+    owner = (unit.get("owner_name") or "").strip()
+
+    elems = [
+        Paragraph("INNSBRUCK ONE CONDOMINIUM ASSOCIATION", h_assoc),
+        Paragraph("Owner Statement", title),
+        Paragraph(
+            f"<b>Unit:</b> {unit.get('unit_number')} &nbsp;&nbsp; "
+            f"<b>Owner:</b> {owner}<br/>"
+            f"<b>Statement date:</b> {datetime.now(timezone.utc).strftime('%b %d, %Y')} &nbsp;&nbsp; "
+            f"<b>Coverage:</b> {scope_label}<br/>"
+            f"<b>Monthly fee:</b> {_money(unit.get('monthly_fee'))}", meta),
+        Spacer(1, 10),
+    ]
+    by_year = OrderedDict()
+    for r in rows:
+        by_year.setdefault(r["period_year"], []).append(r)
+    for y, yr_rows in by_year.items():
+        elems.append(Paragraph(str(y), yr_style))
+        data = [["Month", "Due", "Paid", "Paid date", "Balance"]]
+        for r in sorted(yr_rows, key=lambda x: x["period_month"]):
+            late = " (late)" if r.get("is_late") else ""
+            data.append([
+                _MONTH_NAMES[r["period_month"] - 1] + late,
+                _money(r["amount_due"]),
+                _money(r["amount_paid"]) if r["paid"] else "—",
+                r.get("paid_date") or "—",
+                _money(r["short"]) if r["short"] > 0 else "—",
+            ])
+        t = Table(data, colWidths=[1.6 * inch, 1.0 * inch, 1.0 * inch, 1.3 * inch, 1.0 * inch])
+        t.setStyle(TableStyle([
+            ("FONTSIZE", (0, 0), (-1, -1), 9),
+            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+            ("LINEBELOW", (0, 0), (-1, 0), 1, colors.HexColor("#333333")),
+            ("LINEBELOW", (0, 1), (-1, -1), 0.4, colors.HexColor("#dddddd")),
+            ("ALIGN", (1, 0), (2, -1), "RIGHT"),
+            ("ALIGN", (4, 0), (4, -1), "RIGHT"),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        elems.append(t)
+    elems.append(Spacer(1, 12))
+    totals_data = [
+        [f"Total billed ({scope_label})", _money(totals["total_due"])],
+        ["Total paid", _money(totals["total_paid"])],
+        ["Balance due", _money(totals["total_short"])],
+    ]
+    tt = Table(totals_data, colWidths=[4.5 * inch, 1.4 * inch])
+    tt.setStyle(TableStyle([
+        ("FONTSIZE", (0, 0), (-1, -1), 11),
+        ("ALIGN", (1, 0), (1, -1), "RIGHT"),
+        ("LINEABOVE", (0, 0), (-1, 0), 1.5, green),
+        ("FONTNAME", (0, 2), (-1, 2), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 2), (-1, 2), 13),
+        ("LINEABOVE", (0, 2), (-1, 2), 0.5, colors.HexColor("#dddddd")),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+    ]))
+    elems.append(tt)
+    elems.append(Spacer(1, 20))
+    note = ParagraphStyle("note", parent=styles["Normal"], fontSize=8, textColor=colors.HexColor("#78716c"))
+    elems.append(Paragraph("Late fees, when assessed, are applied manually by the treasurer and are not reflected "
+                           "above unless recorded. Questions? Contact the association treasurer.", note))
+    doc.build(elems)
+    return buf.getvalue()
+
+
+class StatementEmailIn(BaseModel):
+    year: Optional[int] = None
+    to: Optional[str] = None
+    note: Optional[str] = None
+
+
+@api.post("/units/{unit_id}/statement/email")
+async def email_statement(unit_id: str, data: StatementEmailIn, user=Depends(get_current_user)):
+    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    to = (data.to or unit.get("owner_email") or "").strip()
+    if not to:
+        raise HTTPException(status_code=400, detail="No email address on file for this owner. Add one on the unit, or enter a recipient.")
+
+    tok = await db.gmail_tokens.find_one({"key": "primary"})
+    scopes = (tok or {}).get("scopes") or []
+    if not any("gmail.send" in s for s in scopes):
+        raise HTTPException(status_code=428, detail="Reconnect Google to grant send permission (Bank Alerts \u2192 Reconnect).")
+    creds = await _gmail_creds()
+    if not creds:
+        raise HTTPException(status_code=428, detail="Google is not connected. Connect it on the Bank Alerts page first.")
+
+    ledger = await _build_ledger(unit, data.year)
+    scope_label = str(data.year) if data.year else "All years"
+    html = _statement_html(unit, ledger["rows"], ledger["totals"], scope_label)
+    if data.note:
+        html = html.replace("</body>", f"<div style='margin-top:16px;padding:12px;background:#f5f5f4;border-radius:6px;font-size:13px'>{data.note}</div></body>")
+    pdf = _statement_pdf(unit, ledger["rows"], ledger["totals"], scope_label)
+
+    import base64 as _b64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    from email.mime.application import MIMEApplication
+
+    subject = f"Innsbruck One \u2014 Owner Statement (Unit {unit.get('unit_number')}, {scope_label})"
+    msg = MIMEMultipart("mixed")
+    msg["To"] = to
+    msg["From"] = (tok or {}).get("email") or "me"
+    msg["Subject"] = subject
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText("Your Innsbruck One owner statement is attached (PDF). An HTML version is included below.", "plain"))
+    alt.attach(MIMEText(html, "html"))
+    msg.attach(alt)
+    part = MIMEApplication(pdf, _subtype="pdf")
+    fname = f"Innsbruck_Statement_Unit{unit.get('unit_number')}_{scope_label.replace(' ', '_')}.pdf"
+    part.add_header("Content-Disposition", "attachment", filename=fname)
+    msg.attach(part)
+
+    raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode()
+    try:
+        svc = gbuild("gmail", "v1", credentials=creds)
+        sent = svc.users().messages().send(userId="me", body={"raw": raw}).execute()
+    except Exception as e:
+        log.exception("Gmail send failed")
+        raise HTTPException(status_code=502, detail=f"Could not send the email: {e}")
+    return {"ok": True, "to": to, "message_id": sent.get("id"), "balance_due": ledger["totals"]["total_short"]}
+
+
+@api.get("/reports/delinquency")
+async def delinquency_report(user=Depends(get_current_user)):
+    """Who-owes-what: units with a past-due (overdue) balance, worst first, plus association totals."""
+    rows = []
+    grand_due = grand_paid = 0.0
+    async for u in db.units.find().sort("unit_number", 1):
+        led = await _build_ledger(u)
+        t = led["totals"]
+        grand_due += t["total_due"]
+        grand_paid += t["total_paid"]
+        if t["overdue"] > 0.005:
+            oldest = None
+            now_ym = (datetime.now(timezone.utc).year, datetime.now(timezone.utc).month)
+            for r in led["rows"]:
+                if r["short"] > 0 and (r["period_year"], r["period_month"]) < now_ym:
+                    oldest = f"{_MONTH_NAMES[r['period_month']-1]} {r['period_year']}"
+                    break
+            rows.append({
+                "unit_id": str(u["_id"]),
+                "unit_number": u.get("unit_number"),
+                "owner_name": (u.get("owner_name") or "").strip(),
+                "owner_email": u.get("owner_email") or "",
+                "owner_phone": u.get("owner_phone") or "",
+                "overdue": t["overdue"],
+                "balance_due": t["total_short"],
+                "months_overdue": t["months_overdue"],
+                "months_late": t["months_late"],
+                "oldest_owed": oldest,
+            })
+    rows.sort(key=lambda r: r["overdue"], reverse=True)
+    return {
+        "generated_at": now_iso(),
+        "rows": rows,
+        "totals": {
+            "delinquent_units": len(rows),
+            "total_overdue": round(sum(r["overdue"] for r in rows), 2),
+            "grand_billed": round(grand_due, 2),
+            "grand_collected": round(grand_paid, 2),
         },
     }
 
@@ -1681,6 +1954,7 @@ GMAIL_REDIRECT_URI = os.environ.get("GMAIL_REDIRECT_URI", "")
 APP_BASE_URL = os.environ.get("APP_BASE_URL", "")
 GMAIL_SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.send",
     "openid",
     "https://www.googleapis.com/auth/userinfo.email",
 ]
@@ -1831,11 +2105,15 @@ async def _match_txn(kind: str, amount: float, txn_date: str, tol: float = 0.50)
 @api.get("/gmail/status")
 async def gmail_status(user=Depends(get_current_user)):
     email = None
+    scopes = []
     doc = await db.gmail_tokens.find_one({"key": "primary"})
     if doc:
         email = doc.get("email")
+        scopes = doc.get("scopes") or []
     creds = await _gmail_creds()  # validates/refreshes; clears the token if expired/revoked
+    can_send = bool(creds) and any("gmail.send" in s for s in scopes)
     return {"connected": bool(creds), "email": email if creds else None,
+            "can_send": can_send,
             "configured": bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)}
 
 
@@ -1882,7 +2160,7 @@ async def gmail_callback(code: str = "", state: str = "", error: str = ""):
     await db.gmail_tokens.update_one(
         {"key": "primary"},
         {"$set": {"key": "primary", "access_token": creds.token, "refresh_token": creds.refresh_token,
-                  "email": email, "connected_at": now_iso()}},
+                  "email": email, "scopes": list(creds.scopes or []), "connected_at": now_iso()}},
         upsert=True,
     )
     return RedirectResponse(f"{APP_BASE_URL}/gmail?gmail=connected")
