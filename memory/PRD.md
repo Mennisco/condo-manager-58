@@ -74,11 +74,11 @@ in a simple, easy-to-use app that I can hand off to the next president or treasu
 
 
 ## Next Tasks (Future backlog — discuss with user next)
-1. Gmail bank-alert parsing (P1) — connect InnsbruckOne@gmail.com to read bank deposit/withdrawal alert emails. (User: tackle next session.)
-2. PWA "install to home screen" support (icon + manifest). (User: tackle next session.)
-3. One-click year-end statement PDFs emailed to owners (P2).
-4. Per-owner drill-down (click unit → full payment history & balance owed); CSV export on Fees/Expenses.
-5. Bank reconcile: one-click "Record this" from a flagged row — DONE (record expense / fee + auto-rematch via POST /api/bank/statements/{id}/rematch & POST /api/fees/record). Remaining nicety: de-dup confirm on re-upload of same period.
+1. Email send is gated until the user reconnects Google once (Bank Alerts → "Reconnect to enable email") to grant the gmail.send scope. Needed before "Email statement", per-owner "Email reminder", and "Remind all overdue owners" can actually send.
+2. De-dup confirm on re-upload of same bank statement period (bank reconcile nicety).
+3. One-click year-end statement PDFs emailed to all owners (P2).
+4. (Done this session) Edit Payment on Posting page; "Remind all overdue owners" button.
+
 
 ## Implemented (June 2026) — Bank Reconciliation + polish
 - **Bank Reconciliation** (`/bank`, nav "Bank Reconcile"): upload a Heartland Bank & Trust statement PDF → deterministic pdfplumber parser (no LLM) extracts credits/withdrawals + balances → auto-matches deposits to PAID fee_payments and withdrawals to expenses by amount (±$0.50) → flags unmatched for review → verifies balance → stores each statement (bank_statements collection, base64 PDF kept). Endpoints: POST /api/bank/reconcile, GET /api/bank/statements, GET/DELETE /api/bank/statements/{id}. Verified iteration_12 (7 new tests). Sample May 2026: 5/6 deposits + 2/4 withdrawals matched, 3 flagged, balanced.

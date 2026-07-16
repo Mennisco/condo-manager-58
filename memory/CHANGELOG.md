@@ -1,5 +1,11 @@
 # Changelog
 
+## July 2026 (session 4) — Posting edit, remind-all, reconnect prompt
+- FEATURE: Edit Payment on Posting page — the "Edit payment" modal (previously only on Monthly Fees) is now on the Posting page too. Extracted into a shared component `/app/frontend/src/components/EditFeeModal.jsx` and used by both Fees.jsx and Posting.jsx. Pencil button `posting-edit-{unit}` opens it; saves via PUT /api/fees/{id}.
+- FEATURE: "Remind all overdue owners" — Delinquency page header now has a one-click button (`remind-all-btn`, shown only when there are delinquent rows) that POSTs to /api/reports/delinquency/remind-all. Backend loops every delinquent unit with an email on file and sends the friendly past-due reminder via Gmail; returns {sent, sent_units, skipped, failed}. Gated 428 until Google reconnect for gmail.send.
+- UX: Bank Alerts page shows an amber "Reconnect to enable email" banner (`gmail-reconnect-banner`) when Google is connected but the gmail.send scope is not yet granted (uses status.can_send). Guides the user to reconnect so statements/reminders can be emailed.
+- Verified: testing_agent iteration_19 = frontend 100% (Posting edit saves+persists, Fees regression OK, Delinquency loads). Backend remind-all verified via curl (correct 428 without send scope). Email send remains gated until the user reconnects Google once.
+
 ## July 2026 (session 3d) — Texting, payment reminders, statement logo, autopay notes
 - FEATURE: Text statement (Google Voice copy/paste) — Owner Ledger "Text" button opens a modal with the owner's phone, a prefilled summary message (unit, owner, billed/paid/balance for the selected coverage), "Copy message", and "Open Google Voice". Purely client-side (Google Voice has no API). Reusable TextMessageModal component.
 - FEATURE: Payment Reminders — on the Delinquency page each overdue owner has "Email" and "Text" reminder actions. Email → POST /api/units/{id}/reminder/email sends a short friendly past-due nudge (no attachment) via Gmail (gated 428 until Google reconnect). Text → copy/paste modal with a past-due message.

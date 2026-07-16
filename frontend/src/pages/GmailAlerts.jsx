@@ -108,6 +108,18 @@ export default function GmailAlerts() {
             <span className="text-[#78716C]">{alerts.length} alert transactions · {unmatched} to review</span>
           </div>
 
+          {status.connected && !status.can_send ? (
+            <div data-testid="gmail-reconnect-banner" className="flex flex-wrap items-center justify-between gap-3 bg-[#FFFBEB] border border-[#FDE68A] rounded-md px-4 py-3 text-sm">
+              <div className="text-[#B45309]">
+                <span className="font-semibold">Email sending is not enabled yet.</span> To email owner statements &amp; reminders,
+                reconnect and check the “Send email” permission box on Google's consent screen.
+              </div>
+              <button data-testid="gmail-reconnect-btn" onClick={connect} className="bg-[#B45309] hover:bg-[#92400E] text-white px-4 py-2 rounded-md font-semibold inline-flex items-center gap-2 shrink-0">
+                <Mail size={16} /> Reconnect to enable email
+              </button>
+            </div>
+          ) : null}
+
           {alerts.length === 0 ? (
             <div className="bg-white border border-[#E7E5E4] rounded-lg p-10 text-center text-[#78716C]">
               No alert transactions yet. Click <span className="font-semibold">Sync now</span> to pull recent Heartland emails.
