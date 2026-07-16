@@ -11,6 +11,7 @@ export default function Delinquency() {
   const [data, setData] = useState(null);
   const [textRow, setTextRow] = useState(null);
   const [sendingId, setSendingId] = useState(null);
+  const [remindingAll, setRemindingAll] = useState(false);
 
   useEffect(() => {
     api.get("/reports/delinquency").then((r) => setData(r.data));
@@ -27,6 +28,26 @@ export default function Delinquency() {
     setSendingId(null);
   };
 
+  const remindAll = async () => {
+    const withEmail = (data?.rows || []).filter((r) => r.owner_email).length;
+    if (withEmail === 0) {
+      toast.error("No delinquent owners have an email on file.");
+      return;
+    }
+    if (!confirm(`Email a past-due reminder to ${withEmail} owner${withEmail === 1 ? "" : "s"} with an email on file?`)) return;
+    setRemindingAll(true);
+    try {
+      const { data: res } = await api.post("/reports/delinquency/remind-all", {});
+      let msg = `Reminders sent to ${res.sent} owner${res.sent === 1 ? "" : "s"}.`;
+      if (res.skipped?.length) msg += ` Skipped ${res.skipped.length} (no email).`;
+      if (res.failed?.length) msg += ` ${res.failed.length} failed.`;
+      toast.success(msg);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Could not send reminders");
+    }
+    setRemindingAll(false);
+  };
+
   if (!data) return <div className="text-[#78716C]">Loading…</div>;
   const { rows, totals } = data;
 
@@ -38,13 +59,25 @@ export default function Delinquency() {
           <h1 className="font-display text-4xl font-bold tracking-tight mt-2">Delinquency Report</h1>
           <p className="text-[#78716C] mt-2 max-w-2xl">Who owes what — past-due balances only (future months not yet due are excluded).</p>
         </div>
-        <button
-          data-testid="print-delinquency-btn"
-          onClick={() => window.print()}
-          className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
-        >
-          <Printer size={16} /> Print / Save as PDF
-        </button>
+        <div className="flex gap-3">
+          {rows.length > 0 ? (
+            <button
+              data-testid="remind-all-btn"
+              onClick={remindAll}
+              disabled={remindingAll}
+              className="border border-[#166534] text-[#166534] hover:bg-[#F0FDF4] px-4 py-2.5 rounded-md font-semibold flex items-center gap-2 disabled:opacity-50"
+            >
+              {remindingAll ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} Remind all overdue owners
+            </button>
+          ) : null}
+          <button
+            data-testid="print-delinquency-btn"
+            onClick={() => window.print()}
+            className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
+          >
+            <Printer size={16} /> Print / Save as PDF
+          </button>
+        </div>
       </div>
 
       <div className="print-area bg-white border border-[#E7E5E4] rounded-lg p-6 md:p-8 print:border-none print:p-0">

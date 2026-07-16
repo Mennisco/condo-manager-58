@@ -1,0 +1,162 @@
+<analysis>**original_problem_statement**: User (president/treasurer of a 10-unit condo association) needs a simple, web-based app to track condo owner monthly fee payments, expenses, annual budgets, vendor/homeowner communications, and compliance. PRODUCT REQUIREMENTS: 10 units, manual payment tracking, simple UI to hand off to future treasurers. Requires custom data import from an existing Excel spreadsheet and Bank statement/alert reconciliation.
+
+**User's preferred language**: English (INSTRUCT: Next agent MUST respond in English only)
+
+**what currently exists?**: A fully functional React, FastAPI, and MongoDB web application named Innsbruck One Manager. It features a Bearer-token auth system, dashboard with financial trends and This month summary tile, units/owners management with Owner Ledger/History, monthly fees tracking with shortfall calculations and manual late fees, an expense/vendor tracker, a P&L statement, deterministic Bank-statement PDF reconciliation (side-by-side view with fees log), and a fully functioning Google OAuth Gmail integration to pull bank alerts and email statements/reminders (with logo and autopay notes). It also includes a Text Message copy/paste modal for Google Voice, Delinquency report, and CSV export functionality.
+
+**Last working item**:
+    - Last item agent was working: Adding an Edit payment capability (EditFeeModal) to the Monthly Fees page so the user can correct paid dates, amounts, payment methods, and notes. This was needed because an incorrect date was triggering a false late flag.
+    - Status: USER VERIFICATION PENDING
+    - Agent Testing Done: Y
+    - Which testing method agent to use?: Frontend testing agent/Screenshot
+    - User Testing Done: N
+
+**All Pending/In progress Issue list**:
+  - Issue 1: Re-authenticate Google OAuth for Email Sending (P0)
+     - Attempted fixes: The agent added the  scope and built the email statement/reminder backend logic.
+     - Next debug checklist: The email features will return a  error until the user clicks to reconnect their Google account. The next agent must ensure the user knows to click the connect button on the UI to grant this new scope before testing any email features.
+     - Why fix this issue and what will be achieved with the fix?: Required to allow the app to send PDF statements and reminders via the user's  address.
+     - Status: USER VERIFICATION PENDING
+     - Is recurring issue? N
+     - Should Test frontend/backend/both after fix?: Both
+     - Blocked on other issue: None
+
+**In progress Task List**:
+  - Task 1: Add Edit capabilities to Posting Page (P2)
+     - Where to resume: 
+     - What will be achieved with this?: The agent added an Edit feature to the Monthly Fees page, but asked the user if they wanted it mirrored on the Posting page. The user forked before confirming.
+     - Status: NOT STARTED
+     - Should Test frontend/backend/both after fix?: Frontend
+     - Blocked on something: User confirmation required.
+
+**Upcoming and Future Tasks**:
+  - P1: Email all delinquent owners one-click button. (Suggested by agent, highly relevant to board follow-ups).
+  - P2: Remind all overdue owners button. (Suggested by agent).
+  *(Note: The PWA Install to Home Screen task was explicitly rejected by the user in this session and has been removed from the roadmap).*
+
+**Completed work in this session**:
+- Bank Reconciliation side-by-side view (DONE)
+- Dashboard This Month summary tile (DONE)
+- Owner History/Ledger drill-down page (DONE)
+- Printable and Emailed Owner Statements with Year filter (DONE)
+- CSV Exports for Reports (DONE)
+- Delinquency Report page and Balance Reminders (DONE)
+- Statement Logo embedding and Autopay Notes mapping (DONE)
+- Text Message copy/paste modal for Google Voice (DONE)
+- Edit Fee functionality on the Monthly Fees page (DONE)
+
+**Earlier issues found/mentioned but not fixed**:
+- None
+
+**Known issue recurrence from previous fork**:
+  - Issue recurrence in previous fork: None
+  - Recurrence count: 0
+  - Status: RESOLVED
+
+**Code Architecture**:
+
+
+**Key Technical Concepts**:
+Frontend: React, TailwindCSS, Shadcn UI
+Backend: FastAPI, Motor (Async MongoDB), PyJWT (Bearer token)
+PDF Parsing & Generation: usage: pdfplumber [-h] [--structure | --structure-text]
+                  [--format {csv,json,text}] [--types TYPES [TYPES ...]]
+                  [--include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]]
+                  [--exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]]
+                  [--laparams LAPARAMS] [--precision PRECISION]
+                  [--pages PAGES [PAGES ...]] [--indent INDENT]
+                  [infile]
+
+positional arguments:
+  infile
+
+options:
+  -h, --help            show this help message and exit
+  --structure           Write the structure tree as JSON. All other arguments
+                        except --pages, --laparams, and --indent will be
+                        ignored
+  --structure-text      Write the structure tree as JSON including text
+                        contents. All other arguments except --pages,
+                        --laparams, and --indent will be ignored
+  --format {csv,json,text}
+  --types TYPES [TYPES ...]
+  --include-attrs INCLUDE_ATTRS [INCLUDE_ATTRS ...]
+                        Include *only* these object attributes in output.
+  --exclude-attrs EXCLUDE_ATTRS [EXCLUDE_ATTRS ...]
+                        Exclude these object attributes from output.
+  --laparams LAPARAMS
+  --precision PRECISION
+  --pages PAGES [PAGES ...]
+  --indent INDENT       Indent level for JSON pretty-printing. for reading statements,  for generating owner statements.
+API Auth: Google OAuth2 integration ()
+
+**key DB schema**:
+  - : {unit_id, period_year, period_month, amount_due, amount_paid, paid, notes, late_fee, paid_date}
+  - : {txn_date, description, amount, kind, status, match, recorded}
+  - : {filename, meta, transactions, created_at}
+  - : {unit_number, owner_name, owner_email, owner_phone, monthly_fee, autopay}
+
+**changes in tech stack**:
+  - Added  via pip to the backend for server-side generation of Owner Statement PDFs.
+
+**All files of reference**:
+  -  (Updated with Edit feature)
+  -  (New file for owner history and statement generation)
+  -  (New file for tracking past-due accounts)
+  -  (Updated with CSV export functionality)
+  -  (New file for Google Voice SMS copy/paste)
+  -  (Contains updated logic for , new  scope, and new endpoints)
+
+**Areas that need refactoring**:
+-  is now over 2360 lines long. It handles routing, database models, Google OAuth, PDF parsing, and PDF generation. It urgently needs to be refactored into a standard , ,  structure to maintain code health.
+
+**key api endpoints**:
+  - 
+  -  
+  - 
+  -  (Requires  authorization)
+  - 
+  - PUT  (For editing existing fee records)
+
+**Critical Info for New Agent**:
+- **Email Sending Authorization:** The agent added the  scope to allow the app to email statements/reminders directly from the user's Gmail. However, the user *must* click the UI to reconnect their Google Account and explicitly grant this permission. Until they do, any email endpoint will return an expected  error.
+- **SMS/Texting:** Because Google Voice lacks an API, texting is handled via a manual copy/paste modal () that opens a deep link to Google Voice. Do not attempt to integrate an automated SMS API like Twilio, as the user explicitly chose this manual route.
+- **Late Flags:** The app flags a payment as Late based purely on the  vs the 10th of that month. Editing the  dynamically clears or sets the late flag.
+
+**documents and test reports created in this job**:
+  - 
+  - 
+  - 
+
+**Last 10 User Messages and any pending HUMAN messages**:
+ - Message 313: Am I okay to fork right now? (COMPLETED)
+ - Message 297: User reports that Allie Roe in 601 shows as late for a July 16th payment, but actually paid on July 1st, and there's no way to edit it. (COMPLETED)
+ - Message 295: User wants to address some issues before moving on. (COMPLETED)
+ - Message 220: User chooses the copy-and-paste method into Google Voice for texting instead of Twilio. (COMPLETED)
+ - Message 217: User explains they can text from Google Voice with their existing Gmail account and wants texting options. (COMPLETED)
+ - Message 214: User asks if there is an option to text the statement instead of email. (COMPLETED)
+ - Message 212: User requests Payment Reminders, Statement Logo, and Autopay Notes features. (COMPLETED)
+ - Message 131: User clarifies they want to email statements via Gmail with an inline body + PDF attachment, and a Year Filter. (COMPLETED)
+ - Message 128: User asks the agent to adopt all four feature enhancements (Statement Year Filter, Balance Reminders, Delinquency Report, Email Statements). (COMPLETED)
+ - Message 73: User chooses print-friendly page for statements and comprehensive CSV exports. (COMPLETED)
+ - *Pending HUMAN message*: None. The user forked the session successfully after the agent confirmed it was safe. Next step is to greet the user, ask if they verified the Fee Editing logic, and prompt them to reconnect their Gmail account to test the email features.
+
+**Project Health Check:**
+- Broken: None
+- Mocked: None
+
+**3rd Party Integrations**:
+  - Google OAuth2 / Gmail API (Requires User-configured Client ID & Secret; now requires  scope authorization)
+
+**Testing status**
+  - Testing agent used after significant changes: YES
+  - Troubleshoot agent used after agent stuck in loop: NO
+  - Test files created: , 
+  - Known regressions: None
+
+**Credentials to test flow:**
+  - Email: 
+  - Password: 
+
+**What agent forgot to execute**
+The agent asked if the user wanted the new Edit payment capability added to the Posting page as well as the Monthly Fees page. The user forked before answering. The next agent should follow up on this.</analysis>

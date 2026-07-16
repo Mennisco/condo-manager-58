@@ -851,6 +851,63 @@ async def email_reminder(unit_id: str, data: ReminderEmailIn, user=Depends(get_c
     return {"ok": True, "to": to, "message_id": sent.get("id"), "overdue": overdue}
 
 
+@api.post("/reports/delinquency/remind-all")
+async def remind_all_overdue(user=Depends(get_current_user)):
+    """Email a friendly past-due reminder to every delinquent owner who has an email on file."""
+    tok = await db.gmail_tokens.find_one({"key": "primary"})
+    scopes = (tok or {}).get("scopes") or []
+    if not any("gmail.send" in s for s in scopes):
+        raise HTTPException(status_code=428, detail="Reconnect Google to grant send permission (Bank Alerts \u2192 Reconnect).")
+    creds = await _gmail_creds()
+    if not creds:
+        raise HTTPException(status_code=428, detail="Google is not connected. Connect it on the Bank Alerts page first.")
+
+    import base64 as _b64
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    svc = gbuild("gmail", "v1", credentials=creds)
+    from_email = (tok or {}).get("email") or "me"
+    sent, skipped, failed = [], [], []
+
+    async for u in db.units.find().sort("unit_number", 1):
+        led = await _build_ledger(u)
+        overdue = led["totals"]["overdue"]
+        if overdue <= 0.005:
+            continue
+        unit_no = u.get("unit_number")
+        to = (u.get("owner_email") or "").strip()
+        if not to:
+            skipped.append(unit_no)
+            continue
+        owner = (u.get("owner_name") or "").strip()
+        html = f"""<!DOCTYPE html><html><body style="font-family:Arial,Helvetica,sans-serif;color:#1c1917;max-width:560px;margin:0 auto;padding:12px">
+<img src="{STATEMENT_LOGO_URL}" alt="Innsbruck One" style="width:160px;max-width:60%;border-radius:6px" />
+<h2 style="color:#166534;font-size:18px;margin:10px 0 4px">Friendly payment reminder</h2>
+<p>Hi {owner or 'there'},</p>
+<p>Our records show <b>Unit {unit_no}</b> has a past-due balance of
+<b style="color:#b45309">{_money(overdue)}</b>. When you have a moment, please send payment at your convenience.</p>
+<p>Thank you! If you've already paid or have any questions, just reply to this email.</p>
+<p style="color:#78716c;font-size:12px;margin-top:20px">Innsbruck One Condominium Association</p>
+</body></html>"""
+        msg = MIMEMultipart("alternative")
+        msg["To"] = to
+        msg["From"] = from_email
+        msg["Subject"] = f"Innsbruck One \u2014 Payment reminder (Unit {unit_no})"
+        msg.attach(MIMEText(f"Unit {unit_no} past-due balance: {_money(overdue)}. Please send payment when convenient. Reply with questions.", "plain"))
+        msg.attach(MIMEText(html, "html"))
+        raw = _b64.urlsafe_b64encode(msg.as_bytes()).decode()
+        try:
+            svc.users().messages().send(userId="me", body={"raw": raw}).execute()
+            sent.append({"unit_number": unit_no, "to": to})
+        except Exception:
+            log.exception("Bulk reminder send failed for unit %s", unit_no)
+            failed.append(unit_no)
+
+    return {"ok": True, "sent": len(sent), "sent_units": sent, "skipped": skipped, "failed": failed}
+
+
+
 @api.get("/reports/delinquency")
 async def delinquency_report(user=Depends(get_current_user)):
     """Who-owes-what: units with a past-due (overdue) balance, worst first, plus association totals."""

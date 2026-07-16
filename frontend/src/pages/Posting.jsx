@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney, MONTHS } from "@/lib/utils";
-import { Check, X, AlertTriangle, Loader2, CheckCircle2 } from "lucide-react";
+import { Check, X, AlertTriangle, Loader2, CheckCircle2, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { EditFeeModal } from "@/components/EditFeeModal";
 
 export default function Posting() {
   const now = new Date();
@@ -10,6 +11,7 @@ export default function Posting() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const load = async () => {
     setLoading(true);
@@ -116,12 +118,22 @@ export default function Posting() {
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold ${f.paid ? "bg-[#F0FDF4] text-[#166534] border border-[#166534]/20" : "bg-[#FEF2F2] text-[#C53030] border border-[#C53030]/20"}`}>
                     {f.paid ? <Check size={14} /> : <X size={14} />} {f.paid ? "Paid" : "Mark paid"}
                   </button>
+                  <button
+                    data-testid={`posting-edit-${f.unit_number}`}
+                    onClick={() => setEditing(f)}
+                    title="Edit paid date, amount, method"
+                    className="ml-3 text-[#78716C] hover:text-[#166534] align-middle inline-flex"
+                  >
+                    <Pencil size={16} />
+                  </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+
+      {editing ? <EditFeeModal fee={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} /> : null}
     </div>
   );
 }
