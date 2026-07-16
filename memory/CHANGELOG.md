@@ -1,5 +1,11 @@
 # Changelog
 
+## July 2026 (session 2b) — Make-up payment + Posting page + manual late fees
+- FEATURE: "Record make-up payment" — POST /api/fees/makeup distributes one check across a unit's underpaid months oldest-first; GET /api/fees/shortfall/{unit_id} lists short months + total. Fees page "Make-up payment" button + MakeupModal (unit picker, live shortfall preview, amount/date). Verified: $72 clears Jeff's 6 months, $48 Earl.
+- FEATURE: new "Posting" page (/posting, nav ListChecks) — monthly routine: mark each unit paid (auto-fills amount=rate, date=now, method), method dropdown, progress stats (X/10 posted, collected, late count). Unpaid units past the 10th flag "Late".
+- CHANGE: late fees are now MANUAL everywhere. list_fees returns is_late (auto flag: paid-after-10th or unpaid-past-10th) and late_fee_applied = stored late_fee_charged. total_due only includes the late fee when explicitly charged. Fees page + Posting page show "Apply {fee}" (when late & not charged) / "Remove" (when charged). PUT /fees accepts late_fee_charged.
+- Verified testing_agent iteration_16 = 100% (6/6), non-destructive.
+
 ## July 2026 (session 2) — July posting, rate sync, shortfall cue
 - Reconciled June 2026 against the 6/30 bank statement (uploaded): all 10 units covered (6 monthly deposits on statement + 4 prepaid earlier). Confirmed "missing" John Eden (605, $87) & Frank Bennett (611, $126) paid via DDA transfers (acct 6010792 / 1066552).
 - CONFIRMED fee increase is effective JULY 1 (Jul–Dec only), NOT full year. True rate shortfall recomputed: Jeff Johnson (607) $72 + Earl Rogers (613) $48 = $120 total on paid Jul–Dec months.
