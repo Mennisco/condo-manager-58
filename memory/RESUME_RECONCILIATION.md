@@ -6,11 +6,14 @@
 - Gmail: refresh tokens expire ~7 days in Google "Testing" mode. Backend now auto-clears dead token so UI shows "Connect Google" again. User declined/undecided on publishing to Production (would stop the weekly expiry).
 
 ## NEXT STEPS (in order)
-1. (Optional next) "Record make-up payment" action — one check spread across shorted months to clear Jeff/Earl (and future) shortfalls. Most owners give one check for the difference; ~1 waits till end of prepay.
-2. Monthly "Posting" screen + manual late-fee assist — user's workflow: POST by the 10th (before statements/emails arrive), flag Late after the 10th, apply/waive late fees manually, then month-end reconcile via statement/email. (User called this "a better idea".)
-3. Reconciliation view (deposits vs fees log) + ongoing PDF statement ingestion for the email-gap months (Jul2025–May2026). User wants email + PDF cross-check.
-4. Multi-type Gmail alert parsing + dedup (New Remote Deposit, Automatic Deposit/Withdrawal) — still not implemented; email is end-of-month reconciliation only, so lower priority than the posting screen.
-5. Import 31 spreadsheet cell-comment notes onto fee_payment rows (check #s, wire details, "PIF thru 12/31").
+1. Reconciliation view (deposits vs fees log) + ongoing PDF statement ingestion for the email-gap months (Jul2025–May2026). User wants email + PDF cross-check.
+2. Multi-type Gmail alert parsing + dedup (New Remote Deposit, Automatic Deposit/Withdrawal) — email is end-of-month reconciliation only.
+3. (Optional) Dashboard "This month" tile: posted/short/late at a glance.
+
+## DONE (session 2c/2d)
+- Imported 31 spreadsheet cell-comment notes onto fee_payment.notes; surfaced as StickyNote hover icon on Fees page.
+- Google OAuth app PUBLISHED to Production (owner account = innsbruckone@gmail.com; project 924824139990). Reconnected -> durable (non-7-day) refresh token. Backend already auto-clears dead tokens.
+- Make-up payment action, Posting page, manual late fees, shortfall cue all shipped & tested.
 
 ## KEY FACTS
 - Fee increase EFFECTIVE JULY 1 2026 (Jul–Dec new rate; Jan–Jun old rate).
