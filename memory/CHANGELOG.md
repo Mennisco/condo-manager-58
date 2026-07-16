@@ -1,5 +1,13 @@
 # Changelog
 
+## July 2026 (session 3d) — Texting, payment reminders, statement logo, autopay notes
+- FEATURE: Text statement (Google Voice copy/paste) — Owner Ledger "Text" button opens a modal with the owner's phone, a prefilled summary message (unit, owner, billed/paid/balance for the selected coverage), "Copy message", and "Open Google Voice". Purely client-side (Google Voice has no API). Reusable TextMessageModal component.
+- FEATURE: Payment Reminders — on the Delinquency page each overdue owner has "Email" and "Text" reminder actions. Email → POST /api/units/{id}/reminder/email sends a short friendly past-due nudge (no attachment) via Gmail (gated 428 until Google reconnect). Text → copy/paste modal with a past-due message.
+- FEATURE: Statement Logo — Innsbruck building photo now appears at the top of the printed statement, the emailed HTML statement, and the generated PDF (reportlab embeds a downscaled 170KB asset at /app/backend/assets/statement_logo.jpg).
+- FEATURE: Autopay/ACH notes — new "Autopay / ACH detail" field per unit (Units add/edit form); shown as a green card on the owner's history page. Seeded for 605 (Heartland DDA #6010792) and 611 (#1066552).
+- Hardening: added _to_oid() so malformed unit ids return 404 instead of 500 (applied to ledger, email-statement, reminder endpoints).
+- Verified: testing_agent iteration_18 = 100% (9/9 backend, all frontend). Email/reminder send remain gated until the user reconnects Google for the gmail.send scope.
+
 ## July 2026 (session 3c) — Emailed statements, year filter, balance reminders, delinquency report
 - FEATURE: Statement Year Filter — Owner Ledger page has a "Coverage" selector (All years / each year). Summary cards, on-screen history, printed statement, and emailed statement all respect the selection.
 - FEATURE: Email Owner Statement (via connected Gmail) — "Email statement" button opens a modal (prefilled owner email + optional note). POST /api/units/{id}/statement/email builds an HTML body + a reportlab PDF attachment and sends through the Gmail API (users().messages().send). Added gmail.send scope (GMAIL_SCOPES); /gmail/status now returns can_send; callback stores granted scopes. Endpoint returns 428 until the user reconnects Google to grant send permission. NOTE: user must reconnect Google once (Bank Alerts → Reconnect) to enable sending.

@@ -430,6 +430,14 @@ def _ser(doc):
     return doc
 
 
+def _to_oid(value: str) -> ObjectId:
+    """Parse an ObjectId or raise a clean 404 for malformed ids."""
+    try:
+        return ObjectId(value)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Not found")
+
+
 # ---------------------------------------------------------------------------
 # Units
 # ---------------------------------------------------------------------------
@@ -548,7 +556,7 @@ async def _build_ledger(unit: dict, year: Optional[int] = None) -> dict:
 @api.get("/units/{unit_id}/ledger")
 async def unit_ledger(unit_id: str, year: Optional[int] = None, user=Depends(get_current_user)):
     """Full payment history for one unit: every month, with status/short/late, plus lifetime totals."""
-    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    unit = await db.units.find_one({"_id": _to_oid(unit_id)})
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
     return await _build_ledger(unit, year)
@@ -735,7 +743,7 @@ class StatementEmailIn(BaseModel):
 
 @api.post("/units/{unit_id}/statement/email")
 async def email_statement(unit_id: str, data: StatementEmailIn, user=Depends(get_current_user)):
-    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    unit = await db.units.find_one({"_id": _to_oid(unit_id)})
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
     to = (data.to or unit.get("owner_email") or "").strip()
@@ -794,7 +802,7 @@ class ReminderEmailIn(BaseModel):
 @api.post("/units/{unit_id}/reminder/email")
 async def email_reminder(unit_id: str, data: ReminderEmailIn, user=Depends(get_current_user)):
     """Send a short, friendly past-due reminder (no attachment) via the connected Gmail."""
-    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    unit = await db.units.find_one({"_id": _to_oid(unit_id)})
     if not unit:
         raise HTTPException(status_code=404, detail="Unit not found")
     to = (data.to or unit.get("owner_email") or "").strip()
