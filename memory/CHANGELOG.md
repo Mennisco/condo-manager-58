@@ -1,5 +1,13 @@
 # Changelog
 
+## July 2026 (session 3c) — Emailed statements, year filter, balance reminders, delinquency report
+- FEATURE: Statement Year Filter — Owner Ledger page has a "Coverage" selector (All years / each year). Summary cards, on-screen history, printed statement, and emailed statement all respect the selection.
+- FEATURE: Email Owner Statement (via connected Gmail) — "Email statement" button opens a modal (prefilled owner email + optional note). POST /api/units/{id}/statement/email builds an HTML body + a reportlab PDF attachment and sends through the Gmail API (users().messages().send). Added gmail.send scope (GMAIL_SCOPES); /gmail/status now returns can_send; callback stores granted scopes. Endpoint returns 428 until the user reconnects Google to grant send permission. NOTE: user must reconnect Google once (Bank Alerts → Reconnect) to enable sending.
+- FEATURE: Balance Reminders — Units & Owners list has a "Balance" column: red "$X due" badge for past-due owners, green "Current" otherwise. Backed by GET /api/units/balances (overdue = past-due only, future months excluded).
+- FEATURE: Delinquency Report — new /delinquency page + sidebar link. GET /api/reports/delinquency lists units with a past-due balance (worst first) with oldest-owed month, months overdue, and contact info; print/save-as-PDF friendly. Association totals (overdue, all-time billed/collected). Currently 0 past-due (everyone paid through Jul 2026).
+- Refactor: extracted _build_ledger() helper (adds overdue/months_overdue) reused by ledger, balances, delinquency, and email endpoints. Added reportlab==5.0.0.
+- Verified: testing_agent iteration_17 = 100% (7/7 backend, all frontend). Email send path is gated (can't be exercised until Google reconnect).
+
 ## July 2026 (session 3b) — Owner history, printable statements, CSV exports
 - FEATURE: Owner History drill-down — click any row on Units & Owners (or "View history" menu) opens /units/:id. GET /api/units/{id}/ledger returns the full month-by-month payment timeline grouped by year, with per-row status (posted/short/unpaid), late flags, imported notes, and lifetime totals (billed / paid / balance due / months paid & late).
 - FEATURE: Printable Owner Statement — "Print statement" button on the ledger page renders a clean print-only document (association header, owner details, year tables with Due/Paid/Paid-date/Balance, and total balance due). Uses existing @media print rules (sidebar hidden). User picks print or Save-as-PDF from the browser dialog.
