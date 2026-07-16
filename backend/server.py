@@ -140,6 +140,7 @@ class FeePayment(BaseDoc):
     paid_date: Optional[str] = None
     method: Optional[str] = None  # check / zelle / cash / other
     late_fee_waived: bool = False
+    late_fee_charged: bool = False
     notes: Optional[str] = None
     created_at: Optional[str] = None
 
@@ -494,19 +495,22 @@ async def list_fees(year: Optional[int] = None, month: Optional[int] = None, use
     for r in out:
         lf = late_map.get(r["unit_id"], 0.0)
         r["late_fee"] = lf
-        applies = False
-        if lf > 0 and not r.get("late_fee_waived"):
-            due_by = datetime(r["period_year"], r["period_month"], 10).date()
-            if r.get("paid") and r.get("paid_date"):
-                try:
-                    pd = datetime.fromisoformat(r["paid_date"].replace("Z", "+00:00")).date()
-                    applies = pd > due_by
-                except Exception:
-                    applies = False
-            elif not r.get("paid"):
-                applies = today > due_by
-        r["late_fee_applied"] = applies
-        r["total_due"] = round(float(r.get("amount_due", 0)) + (lf if applies else 0.0), 2)
+        # Auto-detect a LATE flag (informational): paid after the 10th, or unpaid past the 10th.
+        due_by = datetime(r["period_year"], r["period_month"], 10).date()
+        is_late = False
+        if r.get("paid") and r.get("paid_date"):
+            try:
+                pd = datetime.fromisoformat(r["paid_date"].replace("Z", "+00:00")).date()
+                is_late = pd > due_by
+            except Exception:
+                is_late = False
+        elif not r.get("paid"):
+            is_late = today > due_by
+        r["is_late"] = is_late
+        # Late fee is MANUAL: only counts when explicitly charged by the treasurer.
+        charged = bool(r.get("late_fee_charged")) and lf > 0
+        r["late_fee_applied"] = charged
+        r["total_due"] = round(float(r.get("amount_due", 0)) + (lf if charged else 0.0), 2)
         # Shortfall: paid but underpaid (e.g. paid old rate after a mid-year increase)
         due_amt = float(r.get("amount_due", 0) or 0)
         paid_amt = float(r.get("amount_paid", 0) or 0)
@@ -570,12 +574,63 @@ async def create_fee(data: FeePaymentIn, user=Depends(get_current_user)):
 
 @api.put("/fees/{fee_id}")
 async def update_fee(fee_id: str, data: dict, user=Depends(get_current_user)):
-    allowed = {"amount_due", "amount_paid", "paid", "paid_date", "method", "late_fee_waived", "notes"}
+    allowed = {"amount_due", "amount_paid", "paid", "paid_date", "method", "late_fee_waived", "late_fee_charged", "notes"}
     update = {k: v for k, v in data.items() if k in allowed}
     if "paid" in update and update["paid"] and not update.get("paid_date"):
         update["paid_date"] = now_iso()
     await db.fee_payments.update_one({"_id": ObjectId(fee_id)}, {"$set": update})
     return _ser(await db.fee_payments.find_one({"_id": ObjectId(fee_id)}))
+
+
+class MakeupIn(BaseModel):
+    unit_id: str
+    amount: float
+    paid_date: Optional[str] = None
+
+
+@api.get("/fees/shortfall/{unit_id}")
+async def unit_shortfall(unit_id: str, user=Depends(get_current_user)):
+    """List a unit's underpaid (short) months, oldest first, with the total shortfall."""
+    rows = []
+    async for f in db.fee_payments.find({"unit_id": unit_id, "paid": True}).sort(
+        [("period_year", 1), ("period_month", 1)]
+    ):
+        due = float(f.get("amount_due", 0) or 0)
+        paid = float(f.get("amount_paid", 0) or 0)
+        short = round(due - paid, 2)
+        if short > 0:
+            rows.append({"period_year": f["period_year"], "period_month": f["period_month"],
+                         "amount_due": due, "amount_paid": paid, "short": short})
+    return {"months": rows, "total_short": round(sum(r["short"] for r in rows), 2)}
+
+
+@api.post("/fees/makeup")
+async def record_makeup(data: MakeupIn, user=Depends(get_current_user)):
+    """Apply one make-up check across a unit's underpaid months, oldest first."""
+    unit = await db.units.find_one({"_id": ObjectId(data.unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    pd = data.paid_date or now_iso()
+    remaining = round(float(data.amount), 2)
+    cleared = []
+    async for f in db.fee_payments.find({"unit_id": data.unit_id, "paid": True}).sort(
+        [("period_year", 1), ("period_month", 1)]
+    ):
+        if remaining <= 0:
+            break
+        due = float(f.get("amount_due", 0) or 0)
+        paid = float(f.get("amount_paid", 0) or 0)
+        short = round(due - paid, 2)
+        if short <= 0:
+            continue
+        add = round(min(short, remaining), 2)
+        await db.fee_payments.update_one({"_id": f["_id"]}, {"$set": {
+            "amount_paid": round(paid + add, 2), "makeup_date": pd,
+        }})
+        remaining = round(remaining - add, 2)
+        cleared.append({"period_year": f["period_year"], "period_month": f["period_month"], "applied": add})
+    return {"applied": round(float(data.amount) - remaining, 2), "months_cleared": cleared,
+            "remaining_credit": round(remaining, 2)}
 
 
 @api.delete("/fees/{fee_id}")

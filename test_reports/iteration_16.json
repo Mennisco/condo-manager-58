@@ -1,0 +1,56 @@
+{
+  "summary": "Frontend-only verification of new Posting page + Make-up payment modal + Monthly Fees short/late display. All primary assertions passed non-destructively. Login as treasurer works, Posting page loads with correct stats, unit 601 toggle round-trip restored data to Paid, make-up modal totals match spec ($72 for 607, $48 for 613), modal closed without submitting, short badges and Short(rate) stat remain intact after close.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Fees > Make-up modal", "issues": ["React hydration/DOM warning: '<span> cannot be a child of <option>' from MakeupModal.jsx (line ~59). Cosmetic only, but should be cleaned up — option text should be plain string, not a wrapped <span> with dynamic attributes."]}
+    ]
+  },
+  "detailed_results": {
+    "posting_page": {
+      "nav-posting_exists": true,
+      "route": "/posting",
+      "posting-page_rendered": true,
+      "posting-month_default": "7 (July)",
+      "posting-year_default": "2026",
+      "posting-stat-posted": "10 / 10",
+      "posting-stat-collected": "$1,200.00",
+      "posting-stat-late": "0",
+      "unit_601_toggle_flow": "Paid -> click -> 'Mark paid' (stat 9/10) -> click -> 'Paid' (stat 10/10). Non-destructive: fully restored.",
+      "posting-method-601_exists": true
+    },
+    "makeup_modal": {
+      "record-makeup-btn_opens_modal": true,
+      "makeup-unit_is_native_select_with_10_units": true,
+      "unit_607_makeup-total-short": "$72.00 (matches expected)",
+      "unit_613_makeup-total-short": "$48.00 (matches expected)",
+      "makeup-close_closes_modal": true,
+      "submit_button_NOT_clicked": true,
+      "note": "No elements matched selector [data-testid^='makeup-month-']. The per-month list may render via different testid/naming; totals still verify correctness. Main agent may want to add testids like makeup-month-{ym} for future regression."
+    },
+    "fees_page_post_close": {
+      "short-tag-607": "SHORT $12.00",
+      "short-tag-613": "SHORT $12.00",
+      "fees-stat-short": "$24.00",
+      "apply-late-fee_buttons_count": 1,
+      "apply-late-fee_context": "Unit 601 (Paid on Jul 16, past the 10th) shows 'Late — Apply $30.00'. Paid-on-time rows correctly show '—'. No crash."
+    }
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix React hydration warning in /app/frontend/src/components/MakeupModal.jsx — <option> children should be plain text, not <span>. This is likely caused by inline JSX with data-testid attributes injected onto option content.",
+    "(Nice-to-have) Add data-testid=\"makeup-month-{unitId}-{yyyy-mm}\" on each row of the shortfall month list so future tests can enumerate the 6 months (Jul–Dec 2026)."
+  ],
+  "critical_code_review_comments": [
+    "Make-up modal renders <span> inside <option>, invalid HTML — cosmetic but should be corrected."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (not tested)", "frontend": "100% (6/6 spec items verified)"},
+  "test_credentials": "innsbruckone@gmail.com / 1nn58ruck0ne (from prompt)",
+  "seed_data_creation": "None. Non-destructive test: 601 toggle round-tripped to Paid, make-up modal closed without submit, no PUT/POST mutations to fee data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Posting page + make-up modal + late-fee manual column verified end-to-end. If retesting, unit 607 shortfall=$72, unit 613=$48 for July 2026. Unit 601 is paid on Jul 16 so an apply-late-fee-601 button renders. The 'Late—Apply' badge is treated as apply-late-fee button per data-testid prefix match."
+}

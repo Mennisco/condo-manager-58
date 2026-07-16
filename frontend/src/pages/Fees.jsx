@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, MONTHS } from "@/lib/utils";
-import { Check, X, Loader2, AlertTriangle, Trash2 } from "lucide-react";
+import { Check, X, Loader2, AlertTriangle, Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { MakeupModal } from "@/components/MakeupModal";
 
 export default function Fees() {
   const now = new Date();
@@ -11,6 +12,7 @@ export default function Fees() {
   const [fees, setFees] = useState([]);
   const [loading, setLoading] = useState(false);
   const [genLoading, setGenLoading] = useState(false);
+  const [showMakeup, setShowMakeup] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -49,7 +51,7 @@ export default function Fees() {
   };
 
   const toggleWaive = async (f) => {
-    await api.put(`/fees/${f.id}`, { late_fee_waived: !f.late_fee_waived });
+    await api.put(`/fees/${f.id}`, { late_fee_charged: !f.late_fee_applied });
     load();
   };
 
@@ -86,6 +88,13 @@ export default function Fees() {
             <input data-testid="fee-year" type="number" value={year} onChange={(e) => setYear(Number(e.target.value))} className={`${inp} w-24`} />
           </div>
           <button
+            data-testid="record-makeup-btn"
+            onClick={() => setShowMakeup(true)}
+            className="border border-[#166534] text-[#166534] hover:bg-[#F0FDF4] px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
+          >
+            <Plus size={16} /> Make-up payment
+          </button>
+          <button
             data-testid="generate-fees-btn"
             onClick={generate}
             disabled={genLoading}
@@ -96,6 +105,8 @@ export default function Fees() {
           </button>
         </div>
       </div>
+
+      {showMakeup ? <MakeupModal onClose={() => setShowMakeup(false)} onSaved={() => { setShowMakeup(false); load(); }} /> : null}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Stat label="Collected" value={fmtMoney(total)} accent="bg-[#F0FDF4] text-[#166534]" testid="fees-stat-collected" />
@@ -132,30 +143,31 @@ export default function Fees() {
                 <td className="px-6 py-4">{f.owner_name}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(f.amount_due)}</td>
                 <td className="px-6 py-4 text-right tabular-nums">
-                  {f.late_fee_applied ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <span className="text-[#B45309] font-semibold" title="Late fee applied (paid/owed after the 10th)">{fmtMoney(f.late_fee)}</span>
+                  {f.late_fee > 0 ? (
+                    f.late_fee_applied ? (
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="text-[#B45309] font-semibold" title="Late fee charged to this account">{fmtMoney(f.late_fee)}</span>
+                        <button
+                          data-testid={`remove-late-fee-${f.unit_number}`}
+                          onClick={() => toggleWaive(f)}
+                          title="Remove this late fee"
+                          className="text-[10px] uppercase tracking-wide font-bold text-[#78716C] hover:text-[#166534] border border-[#E7E5E4] rounded px-1.5 py-0.5"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ) : f.is_late ? (
                       <button
-                        data-testid={`waive-late-fee-${f.unit_number}`}
+                        data-testid={`apply-late-fee-${f.unit_number}`}
                         onClick={() => toggleWaive(f)}
-                        title="Waive this late fee"
-                        className="text-[10px] uppercase tracking-wide font-bold text-[#78716C] hover:text-[#166534] border border-[#E7E5E4] rounded px-1.5 py-0.5"
+                        title="This payment is late — apply the late fee manually"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#B45309] bg-[#FFFBEB] border border-[#FDE68A] rounded px-2 py-1 hover:bg-[#FEF3C7]"
                       >
-                        Waive
+                        Late — Apply {fmtMoney(f.late_fee)}
                       </button>
-                    </div>
-                  ) : f.late_fee_waived && f.late_fee > 0 ? (
-                    <div className="flex items-center justify-end gap-2">
-                      <span className="text-[#78716C] line-through" title="Late fee waived">{fmtMoney(f.late_fee)}</span>
-                      <button
-                        data-testid={`unwaive-late-fee-${f.unit_number}`}
-                        onClick={() => toggleWaive(f)}
-                        title="Re-apply this late fee"
-                        className="text-[10px] uppercase tracking-wide font-bold text-[#78716C] hover:text-[#B45309] border border-[#E7E5E4] rounded px-1.5 py-0.5"
-                      >
-                        Undo
-                      </button>
-                    </div>
+                    ) : (
+                      <span className="text-[#A8A29E]">—</span>
+                    )
                   ) : (
                     <span className="text-[#A8A29E]">—</span>
                   )}

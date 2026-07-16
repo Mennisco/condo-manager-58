@@ -15,6 +15,7 @@ import {
   FileBarChart2,
   LogOut,
   Building2,
+  ListChecks,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
@@ -23,6 +24,7 @@ const links = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, testid: "nav-dashboard" },
   { to: "/units", label: "Units & Owners", icon: Home, testid: "nav-units" },
   { to: "/fees", label: "Monthly Fees", icon: CreditCard, testid: "nav-fees" },
+  { to: "/posting", label: "Posting", icon: ListChecks, testid: "nav-posting" },
   { to: "/expenses", label: "Expenses", icon: Receipt, testid: "nav-expenses" },
   { to: "/budget", label: "Annual Budget", icon: CalendarRange, testid: "nav-budget" },
   { to: "/fee-increase", label: "Fee Increase", icon: Calculator, testid: "nav-fee-increase" },

@@ -8,6 +8,7 @@ import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Units from "@/pages/Units";
 import Fees from "@/pages/Fees";
+import Posting from "@/pages/Posting";
 import Expenses from "@/pages/Expenses";
 import Budget from "@/pages/Budget";
 import FeeIncrease from "@/pages/FeeIncrease";
@@ -67,6 +68,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/units" element={<Units />} />
             <Route path="/fees" element={<Fees />} />
+            <Route path="/posting" element={<Posting />} />
             <Route path="/expenses" element={<Expenses />} />
             <Route path="/budget" element={<Budget />} />
             <Route path="/fee-increase" element={<FeeIncrease />} />
