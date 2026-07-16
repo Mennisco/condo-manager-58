@@ -1,5 +1,12 @@
 # Changelog
 
+## July 2026 (session 2) — July posting, rate sync, shortfall cue
+- Reconciled June 2026 against the 6/30 bank statement (uploaded): all 10 units covered (6 monthly deposits on statement + 4 prepaid earlier). Confirmed "missing" John Eden (605, $87) & Frank Bennett (611, $126) paid via DDA transfers (acct 6010792 / 1066552).
+- CONFIRMED fee increase is effective JULY 1 (Jul–Dec only), NOT full year. True rate shortfall recomputed: Jeff Johnson (607) $72 + Earl Rogers (613) $48 = $120 total on paid Jul–Dec months.
+- DATA CHANGES: synced Jul–Dec 2026 amount_due -> current monthly_fee (60 rows); recorded 6 July payments at new rate (603 $120, 605 $96, 609 $138, 611 $138, 617 $120, 619 $120; placeholder paid_date 2026-07-01, true-up at month-end vs July statement). July now fully posted; only 607 & 613 short $12 each ($24 July).
+- FEATURE: shortfall visual cue on Monthly Fees page. Backend list_fees returns `short` = amount_due - amount_paid when paid & underpaid. Frontend Fees.jsx: amber "Short $X" badge (short-tag-<unit>), row amber tint, new "Short (rate)" summary stat (fees-stat-short). Late fees remain fully MANUAL (user waives these due to the increase; grace extended a month). Verified testing_agent iteration_15 = 100%.
+- Also: Gmail token now auto-clears when expired/revoked (Google "Testing" mode ~7-day refresh-token expiry) so UI shows Connect again. See RESUME_RECONCILIATION.md.
+
 ## July 2026 — Record-state + login photo fix
 - Bug: recording a split deposit (e.g. $288 → 3× $96 for Chuck Lough) saved the fees correctly but the alert row stayed "Review" because _match_txn only matches a single equal-amount fee_payment. Users thought it failed and re-recorded.
 - Fix: gmail_alerts now carry a persistent `recorded` flag. New endpoint POST /api/gmail/alerts/{aid}/resolve?recorded=bool. Record modal passes alertId; onRecorded resolves the alert. Table shows green "Recorded" badge + Undo link (priority: recorded > match > review). unmatched count excludes recorded.
