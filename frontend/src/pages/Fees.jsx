@@ -64,6 +64,7 @@ export default function Fees() {
   const due = fees.reduce((a, f) => a + (f.total_due ?? f.amount_due ?? 0), 0);
   const lateFees = fees.reduce((a, f) => a + (f.late_fee_applied ? f.late_fee || 0 : 0), 0);
   const overdue = fees.filter((f) => !f.paid).length;
+  const shortTotal = fees.reduce((a, f) => a + (f.short || 0), 0);
 
   return (
     <div data-testid="fees-page" className="space-y-6">
@@ -96,10 +97,11 @@ export default function Fees() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
         <Stat label="Collected" value={fmtMoney(total)} accent="bg-[#F0FDF4] text-[#166534]" testid="fees-stat-collected" />
         <Stat label="Total Due" value={fmtMoney(due)} accent="bg-[#F5F5F4] text-[#1C1917]" testid="fees-stat-due" />
         <Stat label="Late Fees" value={fmtMoney(lateFees)} accent="bg-[#FFFBEB] text-[#B45309]" testid="fees-stat-latefees" />
+        <Stat label="Short (rate)" value={fmtMoney(shortTotal)} accent="bg-[#FFFBEB] text-[#B45309]" testid="fees-stat-short" icon={shortTotal > 0 ? AlertTriangle : null} />
         <Stat label="Unpaid Units" value={overdue} accent="bg-[#FEF2F2] text-[#C53030]" testid="fees-stat-unpaid" icon={overdue > 0 ? AlertTriangle : null} />
       </div>
 
@@ -125,7 +127,7 @@ export default function Fees() {
                 No fees for {MONTHS[month - 1]} {year}. Click "Generate" to create one per unit.
               </td></tr>
             ) : fees.map((f) => (
-              <tr key={f.id} data-testid={`fee-row-${f.unit_number}`} className="border-t border-[#E7E5E4] hover:bg-[#F5F5F4]">
+              <tr key={f.id} data-testid={`fee-row-${f.unit_number}`} className={`border-t border-[#E7E5E4] hover:bg-[#F5F5F4] ${f.short > 0 ? "bg-[#FFFBEB]/60" : ""}`}>
                 <td className="px-6 py-4 font-semibold">{f.unit_number}</td>
                 <td className="px-6 py-4">{f.owner_name}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(f.amount_due)}</td>
@@ -158,7 +160,18 @@ export default function Fees() {
                     <span className="text-[#A8A29E]">—</span>
                   )}
                 </td>
-                <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(f.amount_paid)}</td>
+                <td className="px-6 py-4 text-right tabular-nums">
+                  {fmtMoney(f.amount_paid)}
+                  {f.short > 0 ? (
+                    <div
+                      data-testid={`short-tag-${f.unit_number}`}
+                      title={`Paid ${fmtMoney(f.amount_paid)} of ${fmtMoney(f.amount_due)} due — short ${fmtMoney(f.short)} (rate increase). Late fee waived; grace extended.`}
+                      className="mt-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-[#FFFBEB] text-[#B45309] border border-[#FDE68A]"
+                    >
+                      <AlertTriangle size={10} /> Short {fmtMoney(f.short)}
+                    </div>
+                  ) : null}
+                </td>
                 <td className="px-6 py-4 text-[#78716C]">
                   {f.paid_date ? fmtDate(f.paid_date) : "—"}
                   {f.prepaid ? (

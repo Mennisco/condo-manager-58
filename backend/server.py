@@ -507,6 +507,10 @@ async def list_fees(year: Optional[int] = None, month: Optional[int] = None, use
                 applies = today > due_by
         r["late_fee_applied"] = applies
         r["total_due"] = round(float(r.get("amount_due", 0)) + (lf if applies else 0.0), 2)
+        # Shortfall: paid but underpaid (e.g. paid old rate after a mid-year increase)
+        due_amt = float(r.get("amount_due", 0) or 0)
+        paid_amt = float(r.get("amount_paid", 0) or 0)
+        r["short"] = round(due_amt - paid_amt, 2) if (r.get("paid") and paid_amt < due_amt) else 0.0
     # Mark prepaid: paid rows whose (unit_id, paid_date) is shared by >1 row anywhere
     paid_keys = [(r["unit_id"], r.get("paid_date")) for r in out if r.get("paid") and r.get("paid_date")]
     if paid_keys:
