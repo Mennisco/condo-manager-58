@@ -1,5 +1,11 @@
 # Changelog
 
+## July 2026 (session 3b) — Owner history, printable statements, CSV exports
+- FEATURE: Owner History drill-down — click any row on Units & Owners (or "View history" menu) opens /units/:id. GET /api/units/{id}/ledger returns the full month-by-month payment timeline grouped by year, with per-row status (posted/short/unpaid), late flags, imported notes, and lifetime totals (billed / paid / balance due / months paid & late).
+- FEATURE: Printable Owner Statement — "Print statement" button on the ledger page renders a clean print-only document (association header, owner details, year tables with Due/Paid/Paid-date/Balance, and total balance due). Uses existing @media print rules (sidebar hidden). User picks print or Save-as-PDF from the browser dialog.
+- FEATURE: CSV exports (Annual Report page "Data exports" card) — GET /api/export/fees.csv (year or all), /api/export/expenses.csv (year or all), /api/export/owner-summary.csv (all-time per-owner totals). Downloaded via authenticated blob fetch. Verified filenames + contents.
+- All endpoints verified via curl; ledger, print layout, and CSV download verified via screenshots/Playwright.
+
 ## July 2026 (session 3) — Reconciliation cross-check + Dashboard "This Month" tile
 - FEATURE: Bank Reconcile "Cross-check" side-by-side view — GET /api/bank/reconcile-view?year&month shows parsed PDF bank deposits next to recorded fee-log payments for the chosen period. Matches by amount (±$1), each used once; prepayments (same unit + paid_date across months) collapse into one payment row. Flags matched / deposit-with-no-record / record-with-no-deposit and shows deposits−payments difference. Period dropdown (GET /api/bank/periods, defaults to opened/uploaded statement's period). Verified June 2026: 6 matched, 1 deposit-only ($120 Mobile Remote Deposit), diff $120.
 - FEATURE: Dashboard "This Month" tile — GET /api/dashboard/this-month returns posted/short/unpaid/late counts + collected/due totals + a "Needs attention" list of unpaid/short units for the current month. Verified Jul 2026: 8 posted, 2 short (607 & 613 $12 each), 1 late.

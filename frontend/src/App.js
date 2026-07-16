@@ -7,6 +7,7 @@ import AppShell from "@/components/layout/AppShell";
 import Login from "@/pages/Login";
 import Dashboard from "@/pages/Dashboard";
 import Units from "@/pages/Units";
+import OwnerLedger from "@/pages/OwnerLedger";
 import Fees from "@/pages/Fees";
 import Posting from "@/pages/Posting";
 import Expenses from "@/pages/Expenses";
@@ -67,6 +68,7 @@ function App() {
           <Route element={<Protected />}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/units" element={<Units />} />
+            <Route path="/units/:unitId" element={<OwnerLedger />} />
             <Route path="/fees" element={<Fees />} />
             <Route path="/posting" element={<Posting />} />
             <Route path="/expenses" element={<Expenses />} />

@@ -7,6 +7,7 @@ load_dotenv(ROOT_DIR / ".env")
 import os
 import io
 import re
+import csv
 import base64
 import logging
 import secrets
@@ -471,6 +472,159 @@ async def apply_fees(rows: List[ApplyFeeRow], user=Depends(get_current_user)):
         )
         n += 1
     return {"updated": n}
+
+
+@api.get("/units/{unit_id}/ledger")
+async def unit_ledger(unit_id: str, user=Depends(get_current_user)):
+    """Full payment history for one unit: every month, with status/short/late, plus lifetime totals."""
+    unit = await db.units.find_one({"_id": ObjectId(unit_id)})
+    if not unit:
+        raise HTTPException(status_code=404, detail="Unit not found")
+    late_fee = float(unit.get("late_fee", 0) or 0)
+    today = datetime.now(timezone.utc).date()
+    rows = []
+    total_due = total_paid = 0.0
+    months_paid = months_unpaid = months_late = 0
+    async for f in db.fee_payments.find({"unit_id": unit_id}).sort(
+        [("period_year", 1), ("period_month", 1)]
+    ):
+        due = float(f.get("amount_due", 0) or 0)
+        paid = float(f.get("amount_paid", 0) or 0)
+        is_paid = bool(f.get("paid"))
+        due_by = datetime(f["period_year"], f["period_month"], 10).date()
+        is_late = False
+        if is_paid and f.get("paid_date"):
+            try:
+                pd = datetime.fromisoformat(f["paid_date"].replace("Z", "+00:00")).date()
+                is_late = pd > due_by
+            except Exception:
+                is_late = False
+        elif not is_paid:
+            is_late = today > due_by
+        eff_paid = paid if is_paid else 0.0
+        short = round(due - eff_paid, 2)
+        if not is_paid:
+            status = "unpaid"; months_unpaid += 1
+        elif paid < due:
+            status = "short"
+        else:
+            status = "posted"
+        if is_paid:
+            months_paid += 1
+        if is_late:
+            months_late += 1
+        total_due += due
+        total_paid += eff_paid
+        rows.append({
+            "period_year": f["period_year"], "period_month": f["period_month"],
+            "amount_due": round(due, 2), "amount_paid": round(paid, 2),
+            "short": short if short > 0 else 0.0, "status": status,
+            "paid": is_paid, "paid_date": (f.get("paid_date") or "")[:10] or None,
+            "method": f.get("method"), "is_late": is_late,
+            "late_fee_charged": bool(f.get("late_fee_charged")),
+            "notes": f.get("notes"),
+        })
+    return {
+        "unit": _ser(unit),
+        "rows": rows,
+        "totals": {
+            "total_due": round(total_due, 2),
+            "total_paid": round(total_paid, 2),
+            "total_short": round(total_due - total_paid, 2),
+            "months_paid": months_paid,
+            "months_unpaid": months_unpaid,
+            "months_late": months_late,
+            "late_fee": late_fee,
+        },
+    }
+
+
+# ---------------------------------------------------------------------------
+# CSV exports
+# ---------------------------------------------------------------------------
+def _csv_response(filename: str, header: list, rows: list) -> Response:
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(header)
+    w.writerows(rows)
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api.get("/export/fees.csv")
+async def export_fees_csv(year: Optional[int] = None, user=Depends(get_current_user)):
+    q = {} if year is None else {"period_year": year}
+    header = ["Unit", "Owner", "Year", "Month", "Amount Due", "Amount Paid",
+              "Short", "Status", "Paid Date", "Method", "Late Fee Charged", "Notes"]
+    out = []
+    async for f in db.fee_payments.find(q).sort(
+        [("period_year", 1), ("period_month", 1), ("unit_number", 1)]
+    ):
+        due = float(f.get("amount_due", 0) or 0)
+        paid = float(f.get("amount_paid", 0) or 0)
+        is_paid = bool(f.get("paid"))
+        eff = paid if is_paid else 0.0
+        short = round(due - eff, 2)
+        status = "Unpaid" if not is_paid else ("Short" if paid < due else "Posted")
+        out.append([
+            f.get("unit_number"), (f.get("owner_name") or "").strip(),
+            f.get("period_year"), f.get("period_month"),
+            f"{due:.2f}", f"{paid:.2f}", f"{max(short,0):.2f}", status,
+            (f.get("paid_date") or "")[:10], f.get("method") or "",
+            "Yes" if f.get("late_fee_charged") else "", (f.get("notes") or "").replace("\n", " "),
+        ])
+    tag = f"_{year}" if year else "_all"
+    return _csv_response(f"innsbruck_fees{tag}.csv", header, out)
+
+
+@api.get("/export/expenses.csv")
+async def export_expenses_csv(year: Optional[int] = None, user=Depends(get_current_user)):
+    q = {}
+    if year is not None:
+        q = {"date": {"$gte": f"{year}-01-01", "$lte": f"{year}-12-31"}}
+    header = ["Date", "Category", "Vendor", "Description", "Amount", "Method", "Date Paid", "Notes"]
+    out = []
+    async for e in db.expenses.find(q).sort("date", 1):
+        out.append([
+            (e.get("date") or "")[:10], e.get("category") or "", e.get("vendor") or "",
+            (e.get("description") or "").replace("\n", " "), f"{float(e.get('amount', 0) or 0):.2f}",
+            e.get("method") or "", (e.get("date_paid") or "")[:10],
+            (e.get("notes") or "").replace("\n", " "),
+        ])
+    tag = f"_{year}" if year else "_all"
+    return _csv_response(f"innsbruck_expenses{tag}.csv", header, out)
+
+
+@api.get("/export/owner-summary.csv")
+async def export_owner_summary_csv(user=Depends(get_current_user)):
+    header = ["Unit", "Owner", "Email", "Phone", "Monthly Fee",
+              "Total Due (all-time)", "Total Paid", "Total Short", "Months Paid", "Months Unpaid"]
+    out = []
+    async for u in db.units.find().sort("unit_number", 1):
+        uid = str(u["_id"])
+        total_due = total_paid = 0.0
+        months_paid = months_unpaid = 0
+        async for f in db.fee_payments.find({"unit_id": uid}):
+            due = float(f.get("amount_due", 0) or 0)
+            paid = float(f.get("amount_paid", 0) or 0)
+            is_paid = bool(f.get("paid"))
+            total_due += due
+            total_paid += paid if is_paid else 0.0
+            if is_paid:
+                months_paid += 1
+            else:
+                months_unpaid += 1
+        out.append([
+            u.get("unit_number"), (u.get("owner_name") or "").strip(),
+            u.get("owner_email") or "", u.get("owner_phone") or "",
+            f"{float(u.get('monthly_fee', 0) or 0):.2f}",
+            f"{total_due:.2f}", f"{total_paid:.2f}", f"{total_due - total_paid:.2f}",
+            months_paid, months_unpaid,
+        ])
+    return _csv_response("innsbruck_owner_summary.csv", header, out)
 
 
 # ---------------------------------------------------------------------------

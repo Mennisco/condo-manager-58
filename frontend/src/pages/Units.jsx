@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { fmtMoney } from "@/lib/utils";
 import { Plus, MoreHorizontal, Home, X } from "lucide-react";
@@ -15,6 +16,7 @@ const empty = {
 };
 
 export default function Units() {
+  const navigate = useNavigate();
   const [units, setUnits] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(empty);
@@ -101,16 +103,19 @@ export default function Units() {
                 No units yet. Add your first unit to get started.
               </td></tr>
             ) : units.map((u) => (
-              <tr key={u.id} data-testid={`unit-row-${u.unit_number}`} className="border-t border-[#E7E5E4] hover:bg-[#F5F5F4]">
+              <tr key={u.id} data-testid={`unit-row-${u.unit_number}`} onClick={() => navigate(`/units/${u.id}`)} className="border-t border-[#E7E5E4] hover:bg-[#F5F5F4] cursor-pointer">
                 <td className="px-6 py-4 font-semibold">{u.unit_number}</td>
-                <td className="px-6 py-4">{u.owner_name}</td>
+                <td className="px-6 py-4">
+                  <span className="text-[#166534] font-medium hover:underline">{u.owner_name}</span>
+                </td>
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_email || "—"}</td>
                 <td className="px-6 py-4 text-[#78716C]">{u.owner_phone || "—"}</td>
                 <td className="px-6 py-4 text-right tabular-nums">{fmtMoney(u.monthly_fee)}</td>
                 <td className="px-6 py-4 text-right tabular-nums text-[#78716C]">{fmtMoney(u.late_fee)}</td>
-                <td className="px-6 py-4 text-right relative">
+                <td className="px-6 py-4 text-right relative" onClick={(e) => e.stopPropagation()}>
                   <RowMenu
                     unit={u}
+                    onView={() => navigate(`/units/${u.id}`)}
                     onEdit={() => onEdit(u)}
                     onDelete={() => onDelete(u.id)}
                   />
@@ -162,7 +167,7 @@ export default function Units() {
   );
 }
 
-function RowMenu({ unit, onEdit, onDelete }) {
+function RowMenu({ unit, onView, onEdit, onDelete }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
@@ -182,7 +187,14 @@ function RowMenu({ unit, onEdit, onDelete }) {
         <MoreHorizontal size={18} />
       </button>
       {open && (
-        <div className="absolute right-0 mt-1 w-32 bg-white border border-[#E7E5E4] rounded-md shadow-md z-20 overflow-hidden">
+        <div className="absolute right-0 mt-1 w-36 bg-white border border-[#E7E5E4] rounded-md shadow-md z-20 overflow-hidden">
+          <button
+            data-testid={`view-unit-${unit.unit_number}`}
+            onClick={() => { setOpen(false); onView(); }}
+            className="block w-full text-left px-3 py-2 text-sm hover:bg-[#F5F5F4]"
+          >
+            View history
+          </button>
           <button
             data-testid={`edit-unit-${unit.unit_number}`}
             onClick={() => { setOpen(false); onEdit(); }}

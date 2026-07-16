@@ -1,7 +1,28 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { fmtMoney, fmtDate, MONTHS } from "@/lib/utils";
-import { Printer, FileBarChart2 } from "lucide-react";
+import { Printer, FileBarChart2, Download } from "lucide-react";
+import { toast } from "sonner";
+
+async function downloadCsv(path, fallbackName) {
+  try {
+    const res = await api.get(path, { responseType: "blob" });
+    const cd = res.headers?.["content-disposition"] || "";
+    const m = cd.match(/filename="?([^"]+)"?/);
+    const name = m ? m[1] : fallbackName;
+    const url = window.URL.createObjectURL(new Blob([res.data], { type: "text/csv" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+    toast.success(`Exported ${name}`);
+  } catch (e) {
+    toast.error("Export failed");
+  }
+}
 
 export default function Reports() {
   const [year, setYear] = useState(new Date().getFullYear());
@@ -35,6 +56,44 @@ export default function Reports() {
             className="bg-[#166534] hover:bg-[#14532D] text-white px-4 py-2.5 rounded-md font-semibold flex items-center gap-2"
           >
             <Printer size={16} /> Print / Save as PDF
+          </button>
+        </div>
+      </div>
+
+      <div data-testid="data-exports" className="no-print bg-white border border-[#E7E5E4] rounded-lg p-6">
+        <div className="flex items-center gap-2 mb-1">
+          <Download size={16} className="text-[#166534]" />
+          <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">Data exports (CSV)</div>
+        </div>
+        <p className="text-sm text-[#78716C] mb-4">Download spreadsheets for records, backup, or handoff to the next treasurer. Fees &amp; expenses use the year selected above; the owner summary is all-time.</p>
+        <div className="flex flex-wrap gap-3">
+          <button
+            data-testid="export-fees-btn"
+            onClick={() => downloadCsv(`/export/fees.csv?year=${year}`, `innsbruck_fees_${year}.csv`)}
+            className="border border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] rounded-md px-4 py-2.5 font-semibold text-sm flex items-center gap-2"
+          >
+            <Download size={15} /> Fees · {year}
+          </button>
+          <button
+            data-testid="export-fees-all-btn"
+            onClick={() => downloadCsv(`/export/fees.csv`, `innsbruck_fees_all.csv`)}
+            className="border border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] rounded-md px-4 py-2.5 font-semibold text-sm flex items-center gap-2"
+          >
+            <Download size={15} /> Fees · all years
+          </button>
+          <button
+            data-testid="export-expenses-btn"
+            onClick={() => downloadCsv(`/export/expenses.csv?year=${year}`, `innsbruck_expenses_${year}.csv`)}
+            className="border border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] rounded-md px-4 py-2.5 font-semibold text-sm flex items-center gap-2"
+          >
+            <Download size={15} /> Expenses · {year}
+          </button>
+          <button
+            data-testid="export-owner-summary-btn"
+            onClick={() => downloadCsv(`/export/owner-summary.csv`, `innsbruck_owner_summary.csv`)}
+            className="border border-[#E7E5E4] hover:border-[#166534] hover:text-[#166534] rounded-md px-4 py-2.5 font-semibold text-sm flex items-center gap-2"
+          >
+            <Download size={15} /> Per-owner summary
           </button>
         </div>
       </div>
