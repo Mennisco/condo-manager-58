@@ -1,5 +1,9 @@
 # Changelog
 
+## July 2026 (session 3) — Reconciliation cross-check + Dashboard "This Month" tile
+- FEATURE: Bank Reconcile "Cross-check" side-by-side view — GET /api/bank/reconcile-view?year&month shows parsed PDF bank deposits next to recorded fee-log payments for the chosen period. Matches by amount (±$1), each used once; prepayments (same unit + paid_date across months) collapse into one payment row. Flags matched / deposit-with-no-record / record-with-no-deposit and shows deposits−payments difference. Period dropdown (GET /api/bank/periods, defaults to opened/uploaded statement's period). Verified June 2026: 6 matched, 1 deposit-only ($120 Mobile Remote Deposit), diff $120.
+- FEATURE: Dashboard "This Month" tile — GET /api/dashboard/this-month returns posted/short/unpaid/late counts + collected/due totals + a "Needs attention" list of unpaid/short units for the current month. Verified Jul 2026: 8 posted, 2 short (607 & 613 $12 each), 1 late.
+
 ## July 2026 (session 2c) — Imported spreadsheet notes
 - Imported all 31 embedded cell comments from "Mo. Fees Log" onto matching fee_payment.notes (check #s, wire details, "PIF thru 12/31", prepayment ranges). Mapped by year-block + row-index (handles prior owners: Christina Fogarty->601 Allie Roe, Ted Johnson->607 Jeff). All 31 matched existing rows; 0 missing.
 - Surfaced notes in UI: amber note icon (StickyNote) with hover tooltip next to owner name on the Monthly Fees page (data-testid fee-note-<unit>).

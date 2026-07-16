@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
-import { fmtMoney, monthShort } from "@/lib/utils";
-import { TrendingUp, TrendingDown, AlertTriangle, Home } from "lucide-react";
+import { fmtMoney, monthShort, MONTHS } from "@/lib/utils";
+import { TrendingUp, TrendingDown, AlertTriangle, Home, CheckCircle2, CircleDollarSign, Clock } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
   PieChart, Pie, Cell, Legend,
@@ -82,14 +82,78 @@ function TrendStrip({ trends }) {
   );
 }
 
+function ThisMonthTile({ tm }) {
+  if (!tm) return null;
+  const label = `${MONTHS[tm.month - 1]} ${tm.year}`;
+  if (!tm.generated) {
+    return (
+      <div data-testid="this-month-tile" className="bg-white border border-[#E7E5E4] rounded-lg p-6">
+        <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">This Month · {label}</div>
+        <div className="text-sm text-[#78716C] mt-3">No fees generated yet for this month. Generate them under <span className="font-semibold">Monthly Fees</span> to track posting.</div>
+      </div>
+    );
+  }
+  const stats = [
+    { key: "posted", label: "Posted", value: tm.posted, icon: CheckCircle2, cls: "text-[#166534] bg-[#F0FDF4] border-[#BBF7D0]" },
+    { key: "short", label: "Short", value: tm.short, icon: CircleDollarSign, cls: "text-[#B45309] bg-[#FFFBEB] border-[#FDE68A]" },
+    { key: "unpaid", label: "Unpaid", value: tm.unpaid, icon: AlertTriangle, cls: "text-[#C53030] bg-[#FEF2F2] border-[#FECACA]" },
+    { key: "late", label: "Late", value: tm.late, icon: Clock, cls: "text-[#78716C] bg-[#F5F5F4] border-[#E7E5E4]" },
+  ];
+  return (
+    <div data-testid="this-month-tile" className="bg-white border border-[#E7E5E4] rounded-lg p-6">
+      <div className="flex items-center justify-between mb-1">
+        <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">This Month · {label}</div>
+        <div className="text-xs text-[#78716C] tabular-nums">Collected {fmtMoney(tm.total_collected)} / {fmtMoney(tm.total_due)}</div>
+      </div>
+      <div className="font-display text-xl font-semibold mb-5">{tm.posted}/{tm.total_units} units posted this month</div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {stats.map((s) => (
+          <div key={s.key} data-testid={`this-month-${s.key}`} className={`rounded-lg border p-4 ${s.cls}`}>
+            <div className="flex items-center gap-2">
+              <s.icon size={15} />
+              <span className="text-xs uppercase tracking-[0.12em] font-bold">{s.label}</span>
+            </div>
+            <div className="font-display text-3xl font-bold mt-2 tabular-nums">{s.value}</div>
+          </div>
+        ))}
+      </div>
+      {tm.attention.length > 0 ? (
+        <div className="mt-5 border-t border-[#E7E5E4] pt-4">
+          <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#78716C] mb-2">Needs attention</div>
+          <div className="space-y-1.5">
+            {tm.attention.map((a, i) => (
+              <div key={i} data-testid={`this-month-attention-${a.unit_number}`} className="flex items-center justify-between text-sm">
+                <span className="text-[#1C1917]">
+                  <span className="font-semibold">Unit {a.unit_number}</span>
+                  <span className="text-[#78716C]"> · {a.owner_name}</span>
+                  {a.is_late ? <span className="ml-2 text-[11px] font-bold text-[#B45309]">LATE</span> : null}
+                </span>
+                <span className={`tabular-nums font-semibold ${a.status === "unpaid" ? "text-[#C53030]" : "text-[#B45309]"}`}>
+                  {a.status === "unpaid" ? `Unpaid ${fmtMoney(a.amount_due)}` : `Short ${fmtMoney(a.short)}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 border-t border-[#E7E5E4] pt-4 flex items-center gap-2 text-sm text-[#166534]">
+          <CheckCircle2 size={16} /> Everyone is fully posted for this month.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const year = new Date().getFullYear();
   const [data, setData] = useState(null);
   const [trends, setTrends] = useState(null);
+  const [thisMonth, setThisMonth] = useState(null);
 
   useEffect(() => {
     api.get(`/dashboard/summary?year=${year}`).then((r) => setData(r.data));
     api.get(`/dashboard/trends`).then((r) => setTrends(r.data.years || []));
+    api.get(`/dashboard/this-month`).then((r) => setThisMonth(r.data));
   }, [year]);
 
   if (!data) {
@@ -167,6 +231,8 @@ export default function Dashboard() {
           accent="bg-[#FEF2F2] text-[#C53030]"
         />
       </div>
+
+      <ThisMonthTile tm={thisMonth} />
 
       <TrendStrip trends={trends} />
 

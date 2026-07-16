@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
-import { fmtMoney } from "@/lib/utils";
-import { Upload, CheckCircle2, AlertTriangle, FileText, Trash2, Loader2, Plus } from "lucide-react";
+import { fmtMoney, MONTHS } from "@/lib/utils";
+import { Upload, CheckCircle2, AlertTriangle, FileText, Trash2, Loader2, Plus, ArrowLeftRight } from "lucide-react";
 import { toast } from "sonner";
 import { RecordTransactionModal } from "@/components/RecordTransactionModal";
 
@@ -11,13 +11,32 @@ export default function BankReconcile() {
   const [units, setUnits] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(null);
+  const [periods, setPeriods] = useState([]);
+  const [sel, setSel] = useState("");
+  const [view, setView] = useState(null);
+  const [viewLoading, setViewLoading] = useState(false);
   const fileRef = useRef();
 
   const loadHistory = () => api.get("/bank/statements").then((r) => setHistory(r.data));
+  const loadPeriods = () =>
+    api.get("/bank/periods").then((r) => {
+      setPeriods(r.data);
+      if (r.data.length && !sel) setSel(`${r.data[0].year}-${r.data[0].month}`);
+    });
   useEffect(() => {
     loadHistory();
+    loadPeriods();
     api.get("/units").then((r) => setUnits(r.data));
   }, []);
+
+  useEffect(() => {
+    if (!sel) return;
+    const [y, m] = sel.split("-").map(Number);
+    setViewLoading(true);
+    api.get(`/bank/reconcile-view?year=${y}&month=${m}`)
+      .then((r) => setView(r.data))
+      .finally(() => setViewLoading(false));
+  }, [sel]);
 
   const onFile = async (e) => {
     const f = e.target.files?.[0];
@@ -31,6 +50,9 @@ export default function BankReconcile() {
       setResult(data);
       toast.success(`Reconciled ${data.summary.deposits_count + data.summary.withdrawals_count} transactions`);
       loadHistory();
+      loadPeriods();
+      const pe = data.meta?.period_end;
+      if (pe) setSel(`${Number(pe.slice(0, 4))}-${Number(pe.slice(5, 7))}`);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Could not process the PDF");
     }
@@ -41,6 +63,8 @@ export default function BankReconcile() {
   const openStatement = async (id) => {
     const { data } = await api.get(`/bank/statements/${id}`);
     setResult(data);
+    const pe = data.meta?.period_end;
+    if (pe) setSel(`${Number(pe.slice(0, 4))}-${Number(pe.slice(5, 7))}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -54,6 +78,11 @@ export default function BankReconcile() {
 
   const onRecorded = async () => {
     setRecording(null);
+    loadPeriods();
+    if (sel) {
+      const [y, m] = sel.split("-").map(Number);
+      api.get(`/bank/reconcile-view?year=${y}&month=${m}`).then((r) => setView(r.data));
+    }
     if (!result?.id) return;
     const { data } = await api.post(`/bank/statements/${result.id}/rematch`);
     setResult(data);
@@ -88,6 +117,14 @@ export default function BankReconcile() {
       </label>
 
       {result ? <ReconcileResult result={result} onRecord={(txn, kind) => setRecording({ txn, kind })} /> : null}
+
+      <SideBySide
+        periods={periods}
+        sel={sel}
+        onSel={setSel}
+        view={view}
+        loading={viewLoading}
+      />
 
       {history.length > 0 ? (
         <div className="bg-white border border-[#E7E5E4] rounded-lg overflow-hidden">
@@ -192,6 +229,122 @@ function Card({ label, value, sub, accent, small }) {
       <div className="text-xs uppercase tracking-[0.15em] font-bold text-[#78716C]">{label}</div>
       <div className={`font-display ${small ? "text-base" : "text-2xl"} font-bold mt-2 tabular-nums ${accent || ""}`}>{value}</div>
       {sub ? <div className="text-xs text-[#78716C] mt-1">{sub}</div> : null}
+    </div>
+  );
+}
+
+function periodLabel(y, m) {
+  return `${MONTHS[m - 1]} ${y}`;
+}
+
+function SideBySide({ periods, sel, onSel, view, loading }) {
+  const s = view?.summary;
+  return (
+    <div data-testid="reconcile-view" className="bg-white border border-[#E7E5E4] rounded-lg overflow-hidden">
+      <div className="px-6 py-4 border-b border-[#E7E5E4] flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <ArrowLeftRight size={18} className="text-[#166534]" />
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#78716C]">Cross-check</div>
+            <div className="font-display text-lg font-semibold">Bank deposits vs. fees log</div>
+          </div>
+        </div>
+        <select
+          data-testid="reconcile-period-select"
+          value={sel}
+          onChange={(e) => onSel(e.target.value)}
+          className="border border-[#D6D3D1] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:border-[#166534]"
+        >
+          {periods.length === 0 ? <option value="">No periods yet</option> : null}
+          {periods.map((p) => (
+            <option key={`${p.year}-${p.month}`} value={`${p.year}-${p.month}`}>
+              {periodLabel(p.year, p.month)}{p.has_statement ? "  · statement" : "  · fees only"}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {loading ? (
+        <div className="p-10 flex items-center justify-center text-[#78716C]"><Loader2 className="animate-spin mr-2" size={18} /> Loading…</div>
+      ) : !view ? (
+        <div className="p-10 text-center text-sm text-[#78716C]">Pick a period to compare.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-[#E7E5E4]">
+            <Mini label="Matched" value={s.matched} accent="text-[#166534]" />
+            <Mini label="Deposit, no record" value={s.deposit_only} accent={s.deposit_only ? "text-[#B45309]" : "text-[#78716C]"} />
+            <Mini label="Record, no deposit" value={s.payment_only} accent={s.payment_only ? "text-[#B45309]" : "text-[#78716C]"} />
+            <Mini label="Deposits − payments" value={fmtMoney(s.difference)} accent={Math.abs(s.difference) < 0.01 ? "text-[#166534]" : "text-[#C53030]"} />
+          </div>
+          {!view.statement ? (
+            <div className="px-6 py-2 text-xs text-[#B45309] bg-[#FFFBEB] border-b border-[#FDE68A] flex items-center gap-2">
+              <AlertTriangle size={13} /> No bank statement uploaded for {periodLabel(view.year, view.month)} — showing recorded payments only. Upload the statement to cross-check.
+            </div>
+          ) : null}
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-[#E7E5E4]">
+            <SideColumn
+              title={`Bank deposits (${view.deposits.length})`}
+              sub={fmtMoney(s.deposits_total)}
+              empty="No deposits on the statement for this period."
+              rows={view.deposits.map((d, i) => ({
+                key: `dep-${i}`,
+                testid: `reconcile-deposit-${i}`,
+                left: d.date,
+                mid: d.match_payment ? `Unit ${d.match_payment.unit_number} · ${d.match_payment.owner_name}${d.match_payment.months > 1 ? ` (${d.match_payment.months} mo)` : ""}` : d.description,
+                amount: d.amount,
+                matched: d.matched,
+              }))}
+            />
+            <SideColumn
+              title={`Fees log payments (${view.payments.length})`}
+              sub={fmtMoney(s.payments_total)}
+              empty="No recorded payments dated in this period."
+              rows={view.payments.map((p, i) => ({
+                key: `pay-${i}`,
+                testid: `reconcile-payment-${i}`,
+                left: p.paid_date,
+                mid: `Unit ${p.unit_number} · ${p.owner_name}${p.months.length > 1 ? ` (${p.months.length} mo)` : ""}`,
+                amount: p.amount,
+                matched: p.matched,
+              }))}
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Mini({ label, value, accent }) {
+  return (
+    <div className="bg-white p-4">
+      <div className="text-[10px] uppercase tracking-[0.12em] font-bold text-[#78716C]">{label}</div>
+      <div className={`font-display text-xl font-bold mt-1 tabular-nums ${accent || ""}`}>{value}</div>
+    </div>
+  );
+}
+
+function SideColumn({ title, sub, rows, empty }) {
+  return (
+    <div>
+      <div className="px-6 py-3 flex items-center justify-between border-b border-[#E7E5E4] bg-[#FAFAF9]">
+        <span className="text-[11px] uppercase tracking-[0.15em] font-bold text-[#78716C]">{title}</span>
+        <span className="text-sm font-semibold tabular-nums">{sub}</span>
+      </div>
+      {rows.length === 0 ? (
+        <div className="px-6 py-8 text-center text-sm text-[#A8A29E]">{empty}</div>
+      ) : (
+        rows.map((r) => (
+          <div key={r.key} data-testid={r.testid} className="flex items-center gap-3 px-6 py-3 border-b border-[#F5F5F4] last:border-0">
+            {r.matched ? <CheckCircle2 size={15} className="text-[#166534] shrink-0" /> : <AlertTriangle size={15} className="text-[#B45309] shrink-0" />}
+            <div className="min-w-0 flex-1">
+              <div className="text-sm truncate">{r.mid}</div>
+              <div className="text-xs text-[#78716C]">{r.left}</div>
+            </div>
+            <div className={`text-right tabular-nums font-semibold text-sm ${r.matched ? "text-[#1C1917]" : "text-[#B45309]"}`}>{fmtMoney(r.amount)}</div>
+          </div>
+        ))
+      )}
     </div>
   );
 }

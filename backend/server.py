@@ -994,6 +994,69 @@ async def dashboard_summary(year: Optional[int] = None, user=Depends(get_current
     }
 
 
+@api.get("/dashboard/this-month")
+async def dashboard_this_month(user=Depends(get_current_user)):
+    """Current-month posting status: posted / short / unpaid / late, plus units needing attention."""
+    now = datetime.now(timezone.utc)
+    y, m = now.year, now.month
+    due_by = datetime(y, m, 10).date()
+    today = now.date()
+    late_map = {}
+    async for u in db.units.find({}, {"late_fee": 1}):
+        late_map[str(u["_id"])] = float(u.get("late_fee", 0) or 0)
+
+    posted = short = unpaid = late = 0
+    attention = []
+    total_due = total_collected = 0.0
+    rows = await db.fee_payments.find({"period_year": y, "period_month": m}).sort("unit_number", 1).to_list(200)
+    for f in rows:
+        due = float(f.get("amount_due", 0) or 0)
+        paid_amt = float(f.get("amount_paid", 0) or 0)
+        is_paid = bool(f.get("paid"))
+        total_due += due
+        total_collected += paid_amt if is_paid else 0.0
+        short_amt = round(due - paid_amt, 2) if (is_paid and paid_amt < due) else 0.0
+        is_late = False
+        if is_paid and f.get("paid_date"):
+            try:
+                pd = datetime.fromisoformat(f["paid_date"].replace("Z", "+00:00")).date()
+                is_late = pd > due_by
+            except Exception:
+                is_late = False
+        elif not is_paid:
+            is_late = today > due_by
+        if is_late:
+            late += 1
+        if not is_paid:
+            unpaid += 1
+            status = "unpaid"
+        elif short_amt > 0:
+            short += 1
+            status = "short"
+        else:
+            posted += 1
+            status = "posted"
+        if status in ("unpaid", "short"):
+            attention.append({
+                "unit_number": f.get("unit_number"),
+                "owner_name": f.get("owner_name"),
+                "status": status,
+                "amount_due": round(due, 2),
+                "amount_paid": round(paid_amt, 2),
+                "short": short_amt if status == "short" else round(due, 2),
+                "is_late": is_late,
+            })
+    return {
+        "year": y, "month": m,
+        "total_units": len(rows),
+        "posted": posted, "short": short, "unpaid": unpaid, "late": late,
+        "total_due": round(total_due, 2), "total_collected": round(total_collected, 2),
+        "generated": len(rows) > 0,
+        "attention": attention,
+    }
+
+
+
 @api.get("/dashboard/trends")
 async def dashboard_trends(user=Depends(get_current_user)):
     """Multi-year trend: collected, expenses, on-time payment rate, late count."""
@@ -1342,6 +1405,117 @@ async def rematch_bank_statement(sid: str, user=Depends(get_current_user)):
     result["filename"] = s.get("filename")
     result["created_at"] = s.get("created_at")
     return result
+
+
+@api.get("/bank/periods")
+async def bank_periods(user=Depends(get_current_user)):
+    """Distinct year/month periods that have a bank statement and/or recorded fee payments."""
+    periods = {}
+    async for s in db.bank_statements.find({}, {"meta.period_end": 1}):
+        pe = (s.get("meta") or {}).get("period_end")
+        if pe and len(pe) >= 7:
+            y, mo = int(pe[:4]), int(pe[5:7])
+            periods.setdefault((y, mo), {"has_statement": False, "has_fees": False})
+            periods[(y, mo)]["has_statement"] = True
+    async for f in db.fee_payments.find({"paid": True, "paid_date": {"$ne": None}}, {"paid_date": 1}):
+        pd = f.get("paid_date")
+        if pd and len(pd) >= 7:
+            try:
+                y, mo = int(pd[:4]), int(pd[5:7])
+            except Exception:
+                continue
+            periods.setdefault((y, mo), {"has_statement": False, "has_fees": False})
+            periods[(y, mo)]["has_fees"] = True
+    out = [{"year": y, "month": mo, **v} for (y, mo), v in periods.items()]
+    out.sort(key=lambda p: (p["year"], p["month"]), reverse=True)
+    return out
+
+
+@api.get("/bank/reconcile-view")
+async def bank_reconcile_view(year: int, month: int, tol: float = 1.0, user=Depends(get_current_user)):
+    """Side-by-side: bank deposits (from the statement covering this month) vs recorded fee payments.
+    Prepayments (one check across several months, same unit + paid_date) collapse to one payment row."""
+    prefix = f"{year}-{month:02d}"
+    stmt = await db.bank_statements.find_one(
+        {"meta.period_end": {"$regex": f"^{prefix}"}}, sort=[("meta.period_end", -1)]
+    )
+    if stmt:
+        start = stmt["meta"]["period_start"]
+        end = stmt["meta"]["period_end"]
+        deposits = [
+            {"date": c.get("date"), "description": c.get("description"), "amount": round(float(c.get("amount", 0)), 2)}
+            for c in stmt.get("credits", [])
+        ]
+        stmt_info = {"id": str(stmt["_id"]), "filename": stmt.get("filename"),
+                     "period_start": start, "period_end": end}
+    else:
+        import calendar
+        last = calendar.monthrange(year, month)[1]
+        start = f"{year}-{month:02d}-01"
+        end = f"{year}-{month:02d}-{last:02d}"
+        deposits = []
+        stmt_info = None
+
+    # Recorded payments whose money arrived in this statement window (by paid_date), grouped.
+    groups = {}
+    async for f in db.fee_payments.find({"paid": True, "paid_date": {"$ne": None}}).sort(
+        [("period_year", 1), ("period_month", 1)]
+    ):
+        pd = f.get("paid_date")
+        if not (pd and start <= pd[:10] <= end):
+            continue
+        key = (f.get("unit_id"), pd[:10])
+        g = groups.setdefault(key, {
+            "unit_number": f.get("unit_number"), "owner_name": f.get("owner_name"),
+            "paid_date": pd[:10], "amount": 0.0, "months": [],
+        })
+        g["amount"] = round(g["amount"] + float(f.get("amount_paid", 0) or 0), 2)
+        g["months"].append({"year": f.get("period_year"), "month": f.get("period_month")})
+    payments = sorted(groups.values(), key=lambda p: (p["paid_date"], str(p["unit_number"])))
+
+    # Match payments to deposits by amount (within tol), each used once.
+    used_dep = set()
+    for p in payments:
+        p["matched"] = False
+        p["match_deposit"] = None
+        for i, d in enumerate(deposits):
+            if i in used_dep:
+                continue
+            if abs(d["amount"] - p["amount"]) <= tol:
+                used_dep.add(i)
+                p["matched"] = True
+                p["match_deposit"] = {"date": d["date"], "amount": d["amount"]}
+                break
+    for i, d in enumerate(deposits):
+        d["matched"] = i in used_dep
+        d["match_payment"] = None
+    # Attach matched-payment label back to deposits
+    for p in payments:
+        if p["matched"] and p["match_deposit"]:
+            for i, d in enumerate(deposits):
+                if i in used_dep and d["date"] == p["match_deposit"]["date"] and abs(d["amount"] - p["amount"]) <= tol and d.get("match_payment") is None:
+                    d["match_payment"] = {"unit_number": p["unit_number"], "owner_name": p["owner_name"], "months": len(p["months"])}
+                    break
+
+    dep_total = round(sum(d["amount"] for d in deposits), 2)
+    pay_total = round(sum(p["amount"] for p in payments), 2)
+    return {
+        "year": year, "month": month,
+        "period_start": start, "period_end": end,
+        "statement": stmt_info,
+        "deposits": deposits,
+        "payments": payments,
+        "summary": {
+            "deposits_total": dep_total,
+            "payments_total": pay_total,
+            "deposits_count": len(deposits),
+            "payments_count": len(payments),
+            "matched": sum(1 for p in payments if p["matched"]),
+            "deposit_only": sum(1 for d in deposits if not d["matched"]),
+            "payment_only": sum(1 for p in payments if not p["matched"]),
+            "difference": round(dep_total - pay_total, 2),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
