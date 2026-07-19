@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+// Backend URL - hardcoded for Cloud Run deployment
+const BACKEND_URL = "https://condo-manager-58.emergent.host";
 export const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
