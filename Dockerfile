@@ -11,8 +11,9 @@ RUN yarn install --frozen-lockfile
 # Copy source code
 COPY frontend/ ./
 
-# Build the React app
-RUN yarn build
+# Build the React app with environment variable
+ARG REACT_APP_BACKEND_URL
+RUN REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL} yarn build
 
 # Runtime stage
 FROM node:20-alpine
