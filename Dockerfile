@@ -12,7 +12,7 @@ RUN yarn install --frozen-lockfile
 COPY frontend/ ./
 
 # Build the React app with environment variable
-ARG REACT_APP_BACKEND_URL
+ARG REACT_APP_BACKEND_URL=https://condo-manager-backend-715462342276.us-central1.run.app
 RUN REACT_APP_BACKEND_URL=${REACT_APP_BACKEND_URL} yarn build
 
 # Runtime stage
